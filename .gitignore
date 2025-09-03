@@ -209,3 +209,4 @@ __marimo__/
 node_modules
 CLAUDE.md
 .next
+.env.local
