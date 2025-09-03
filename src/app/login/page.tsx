@@ -21,39 +21,28 @@ export default function LoginPage() {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) {
-      setError('Please fill in all fields')
-      return
-    }
+    if (!email || !password) return
 
     setLoading(true)
     setError('')
 
-    try {
-      const { error } = isSignUp 
-        ? await signUp(email, password)
-        : await signIn(email, password)
+    const { error } = isSignUp 
+      ? await signUp(email, password)
+      : await signIn(email, password)
 
-      if (error) {
-        setError(error.message)
-      } else {
-        if (isSignUp) {
-          setError('Check your email for a confirmation link!')
-        } else {
-          router.push('/dashboard')
-        }
-      }
-    } catch (err) {
-      setError('An unexpected error occurred')
-    } finally {
-      setLoading(false)
+    if (error) {
+      setError(error.message)
+    } else if (isSignUp) {
+      setError('Check your email for a confirmation link!')
+    } else {
+      router.push('/dashboard')
     }
+    
+    setLoading(false)
   }
 
   const handleGithubAuth = async () => {
     setLoading(true)
-    setError('')
-    
     const { error } = await signInWithGithub()
     if (error) {
       setError(error.message)
@@ -63,8 +52,6 @@ export default function LoginPage() {
 
   const handleGoogleAuth = async () => {
     setLoading(true)
-    setError('')
-    
     const { error } = await signInWithGoogle()
     if (error) {
       setError(error.message)

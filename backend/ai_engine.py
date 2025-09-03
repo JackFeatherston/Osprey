@@ -119,10 +119,15 @@ class RSIStrategy(TradingStrategy):
 class AIEngine:
     """Main AI Engine for trade analysis and proposal generation"""
     
-    def __init__(self, alpaca_api_key: str, alpaca_secret_key: str, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, alpaca_api_key: str, alpaca_secret_key: str, redis_client: Optional[redis.Redis] = None, supabase_client=None):
         self.alpaca_api_key = alpaca_api_key
         self.alpaca_secret_key = alpaca_secret_key
         self.redis_client = redis_client
+        self.supabase_client = supabase_client
+        
+        # List of user IDs to generate proposals for
+        # In production, this could be fetched from user settings or all active users
+        self.target_users = ["default-user"]  # Start with default user
         
         # Initialize Alpaca clients
         self.data_client = StockHistoricalDataClient(alpaca_api_key, alpaca_secret_key)
@@ -141,126 +146,109 @@ class AIEngine:
         
     async def start(self):
         """Start the AI engine"""
-        logger.info("Starting AI Engine...")
         self.is_running = True
         
-        # Run analysis loop
         while self.is_running:
-            try:
-                await self.analyze_markets()
-                await asyncio.sleep(300)  # Analyze every 5 minutes
-            except Exception as e:
-                logger.error(f"Error in analysis loop: {e}")
-                await asyncio.sleep(60)  # Wait 1 minute on error
+            await self.analyze_markets()
+            await asyncio.sleep(300)
     
     def stop(self):
         """Stop the AI engine"""
-        logger.info("Stopping AI Engine...")
         self.is_running = False
     
     async def analyze_markets(self):
         """Analyze market data for all watchlist symbols"""
-        logger.info("Analyzing markets...")
-        
         for symbol in self.watchlist:
-            try:
-                await self.analyze_symbol(symbol)
-            except Exception as e:
-                logger.error(f"Error analyzing {symbol}: {e}")
+            await self.analyze_symbol(symbol)
     
     async def analyze_symbol(self, symbol: str):
         """Analyze a specific symbol and generate proposals if needed"""
-        try:
-            # Get historical data (last 100 days)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=100)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=100)
+        
+        request_params = StockBarsRequest(
+            symbol_or_symbols=[symbol],
+            timeframe=TimeFrame.Day,
+            start=start_date,
+            end=end_date
+        )
+        
+        bars = self.data_client.get_stock_bars(request_params)
+        
+        if not bars.df.empty:
+            df = bars.df.reset_index()
+            df = df[df['symbol'] == symbol].copy()
             
-            request_params = StockBarsRequest(
-                symbol_or_symbols=[symbol],
-                timeframe=TimeFrame.Day,
-                start=start_date,
-                end=end_date
-            )
-            
-            bars = self.data_client.get_stock_bars(request_params)
-            
-            if not bars.df.empty:
-                # Convert to DataFrame
-                df = bars.df.reset_index()
-                df = df[df['symbol'] == symbol].copy()
-                
-                if len(df) > 0:
-                    # Run strategies
-                    for strategy in self.strategies:
-                        signal = strategy.analyze(df, symbol)
-                        if signal:
-                            await self.generate_proposal(symbol, signal, strategy.name)
-                            
-        except Exception as e:
-            logger.error(f"Error getting data for {symbol}: {e}")
+            if len(df) > 0:
+                for strategy in self.strategies:
+                    signal = strategy.analyze(df, symbol)
+                    if signal:
+                        await self.generate_proposal(symbol, signal, strategy.name)
     
     async def generate_proposal(self, symbol: str, signal: Dict, strategy_name: str):
-        """Generate and publish a trade proposal"""
-        proposal = {
-            "id": str(uuid.uuid4()),
-            "symbol": symbol,
-            "action": signal["action"],
-            "quantity": signal["quantity"],
-            "price": signal["price"],
-            "reason": f"[{strategy_name}] {signal['reason']}",
-            "timestamp": datetime.now().isoformat(),
-            "strategy": strategy_name
-        }
-        
-        logger.info(f"Generated proposal: {proposal}")
-        
-        # Publish to Redis
-        if self.redis_client:
-            try:
-                self.redis_client.publish("trade_proposals", json.dumps(proposal))
-                logger.info(f"Published proposal {proposal['id']} to Redis")
-            except Exception as e:
-                logger.error(f"Failed to publish to Redis: {e}")
+        """Generate and store trade proposals for all target users"""
+        for user_id in self.target_users:
+            proposal_data = {
+                "id": str(uuid.uuid4()),
+                "symbol": symbol,
+                "action": signal["action"],
+                "quantity": signal["quantity"],
+                "price": signal["price"],
+                "reason": f"[{strategy_name}] {signal['reason']}",
+                "timestamp": datetime.now().isoformat(),
+                "strategy": strategy_name,
+                "user_id": user_id,
+                "status": "PENDING"
+            }
+            
+            await self._store_proposal(proposal_data)
+    
+    async def _store_proposal(self, proposal_data: Dict):
+        """Store a single proposal in database and broadcast"""
+        if self.supabase_client:
+            created_proposal = await self.supabase_client.create_trade_proposal(proposal_data)
+            self.redis_client.publish("trade_proposals", json.dumps(created_proposal))
+        else:
+            self.redis_client.publish("trade_proposals", json.dumps(proposal_data))
+    
+    def add_target_user(self, user_id: str):
+        """Add a user to receive trade proposals"""
+        if user_id not in self.target_users:
+            self.target_users.append(user_id)
+    
+    def remove_target_user(self, user_id: str):
+        """Remove a user from receiving trade proposals"""
+        if user_id in self.target_users:
+            self.target_users.remove(user_id)
+    
+    def get_target_users(self) -> List[str]:
+        """Get list of users receiving trade proposals"""
+        return self.target_users.copy()
     
     async def execute_trade(self, proposal: Dict) -> bool:
         """Execute an approved trade"""
-        try:
-            # Create market order
-            order_side = OrderSide.BUY if proposal["action"] == "BUY" else OrderSide.SELL
-            
-            market_order_data = MarketOrderRequest(
-                symbol=proposal["symbol"],
-                qty=proposal["quantity"],
-                side=order_side
-            )
-            
-            # Submit order (paper trading)
-            order = self.trading_client.submit_order(order_data=market_order_data)
-            
-            logger.info(f"Executed trade: {order}")
-            
-            # Log execution
-            execution_log = {
-                "proposal_id": proposal["id"],
-                "order_id": str(order.id),
-                "symbol": proposal["symbol"],
-                "action": proposal["action"],
-                "quantity": proposal["quantity"],
-                "status": "EXECUTED",
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            if self.redis_client:
-                try:
-                    self.redis_client.publish("trade_logs", json.dumps(execution_log))
-                except Exception as e:
-                    logger.error(f"Failed to publish execution log: {e}")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to execute trade: {e}")
-            return False
+        order_side = OrderSide.BUY if proposal["action"] == "BUY" else OrderSide.SELL
+        
+        market_order_data = MarketOrderRequest(
+            symbol=proposal["symbol"],
+            qty=proposal["quantity"],
+            side=order_side
+        )
+        
+        order = self.trading_client.submit_order(order_data=market_order_data)
+        
+        execution_log = {
+            "proposal_id": proposal["id"],
+            "order_id": str(order.id),
+            "symbol": proposal["symbol"],
+            "action": proposal["action"],
+            "quantity": proposal["quantity"],
+            "status": "EXECUTED",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        self.redis_client.publish("trade_logs", json.dumps(execution_log))
+        return True
 
 # Singleton instance for the AI engine
 ai_engine_instance: Optional[AIEngine] = None
@@ -269,8 +257,8 @@ def get_ai_engine() -> Optional[AIEngine]:
     """Get the AI engine instance"""
     return ai_engine_instance
 
-def initialize_ai_engine(alpaca_api_key: str, alpaca_secret_key: str, redis_client: Optional[redis.Redis] = None):
+def initialize_ai_engine(alpaca_api_key: str, alpaca_secret_key: str, redis_client: Optional[redis.Redis] = None, supabase_client=None):
     """Initialize the AI engine singleton"""
     global ai_engine_instance
-    ai_engine_instance = AIEngine(alpaca_api_key, alpaca_secret_key, redis_client)
+    ai_engine_instance = AIEngine(alpaca_api_key, alpaca_secret_key, redis_client, supabase_client)
     return ai_engine_instance

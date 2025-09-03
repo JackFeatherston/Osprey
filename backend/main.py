@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Set, Dict, Any
 import redis
 import json
 import uvicorn
@@ -10,6 +10,11 @@ import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from ai_engine import initialize_ai_engine, get_ai_engine
+from supabase_client import get_supabase_client, SupabaseClient
+from auth_middleware import get_current_user, require_auth, get_user_id
+import uuid
+from datetime import datetime
+import threading
 
 # Load environment variables
 load_dotenv()
@@ -23,13 +28,17 @@ async def lifespan(app: FastAPI):
     
     if alpaca_api_key and alpaca_secret_key:
         print("Initializing AI Engine...")
-        ai_engine = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, redis_client)
+        ai_engine = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, redis_client, db)
         # Start AI engine in background
         ai_task = asyncio.create_task(ai_engine.start())
         app.state.ai_task = ai_task
         print("AI Engine started")
     else:
         print("Warning: Alpaca credentials not found. AI Engine disabled.")
+    
+    # Start Redis listener
+    global redis_listener_task
+    redis_listener_task = asyncio.create_task(redis_listener())
     
     yield
     
@@ -44,6 +53,9 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         print("AI Engine stopped")
+    
+    # Stop Redis listener
+    redis_listener_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -56,12 +68,7 @@ app.add_middleware(
 )
 
 # Redis client for pub/sub
-try:
-    redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
-    redis_client.ping()
-except redis.ConnectionError:
-    print("Warning: Redis connection failed. Running without Redis.")
-    redis_client = None
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 # Data models
 class TradeProposal(BaseModel):
@@ -77,10 +84,53 @@ class TradeDecision(BaseModel):
     proposal_id: str
     decision: str  # "APPROVED" or "REJECTED"
     user_id: Optional[str] = None
+    notes: Optional[str] = None
 
-# In-memory storage for demo (replace with Supabase later)
-proposals = []
-decisions = []
+# Initialize Supabase client
+db = get_supabase_client()
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+        
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+        
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+    
+    async def send_message(self, websocket: WebSocket, message: dict):
+        await websocket.send_text(json.dumps(message))
+    
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            await connection.send_text(json.dumps(message))
+
+manager = ConnectionManager()
+
+# Redis subscription for broadcasting updates
+redis_listener_task = None
+
+async def redis_listener():
+    """Listen to Redis pub/sub and broadcast to WebSocket clients"""
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe('trade_proposals', 'trade_logs')
+    
+    while True:
+        message = pubsub.get_message(timeout=1.0)
+        if message and message['type'] == 'message':
+            channel = message['channel']
+            data = json.loads(message['data'])
+            
+            await manager.broadcast({
+                'type': channel,
+                'data': data
+            })
+            
+        await asyncio.sleep(0.1)
 
 @app.get("/")
 async def root():
@@ -92,57 +142,91 @@ async def health_check():
     return {"status": "healthy", "redis": redis_status}
 
 @app.get("/proposals", response_model=List[TradeProposal])
-async def get_proposals():
+async def get_proposals(user_id: str = Depends(get_user_id)):
+    proposals = await db.get_trade_proposals(user_id=user_id)
     return proposals
 
 @app.post("/proposals")
-async def create_proposal(proposal: TradeProposal):
-    proposals.append(proposal)
+async def create_proposal(proposal: TradeProposal, user_id: str = Depends(get_user_id)):
+    # Convert proposal to dict and add required fields
+    proposal_data = proposal.dict()
+    if 'id' not in proposal_data or not proposal_data['id']:
+        proposal_data['id'] = str(uuid.uuid4())
     
-    # Publish to Redis if available
-    if redis_client:
-        try:
-            redis_client.publish("trade_proposals", json.dumps(proposal.dict()))
-        except Exception as e:
-            print(f"Redis publish error: {e}")
+    proposal_data['user_id'] = user_id
     
-    return {"status": "proposal created", "id": proposal.id}
+    # Create proposal in database
+    created_proposal = await db.create_trade_proposal(proposal_data)
+    
+    # Publish to Redis and broadcast via WebSocket
+    redis_client.publish("trade_proposals", json.dumps(created_proposal))
+    
+    await manager.broadcast({
+        'type': 'trade_proposals',
+        'data': created_proposal
+    })
+    
+    return {"status": "proposal created", "id": created_proposal['id']}
 
 @app.post("/decisions")
 async def submit_decision(decision: TradeDecision):
-    decisions.append(decision)
+    proposal = await db.get_trade_proposal(decision.proposal_id)
     
-    # Find the proposal
-    proposal = next((p for p in proposals if p.id == decision.proposal_id), None)
-    if not proposal:
-        raise HTTPException(status_code=404, detail="Proposal not found")
+    decision_data = {
+        "proposal_id": decision.proposal_id,
+        "user_id": proposal["user_id"],
+        "decision": decision.decision,
+        "notes": getattr(decision, 'notes', None)
+    }
     
-    # Execute trade if approved
+    created_decision = await db.create_trade_decision(decision_data)
+    
     execution_success = False
+    
     if decision.decision == "APPROVED":
         ai_engine = get_ai_engine()
         if ai_engine:
-            try:
-                execution_success = await ai_engine.execute_trade(proposal.dict())
-            except Exception as e:
-                print(f"Trade execution error: {e}")
+            execution_data = {
+                "proposal_id": decision.proposal_id,
+                "user_id": proposal["user_id"],
+                "symbol": proposal["symbol"],
+                "action": proposal["action"],
+                "quantity": proposal["quantity"],
+                "execution_status": "PENDING"
+            }
+            
+            execution_record = await db.create_trade_execution(execution_data)
+            execution_result = await ai_engine.execute_trade(proposal)
+            
+            if execution_result:
+                await db.update_trade_execution(execution_record["id"], {
+                    "execution_status": "FILLED",
+                    "executed_price": proposal["price"],
+                    "executed_at": datetime.now().isoformat()
+                })
+                execution_success = True
     
-    # Log decision
     log_entry = {
         "proposal_id": decision.proposal_id,
-        "symbol": proposal.symbol,
-        "action": proposal.action,
+        "symbol": proposal["symbol"],
+        "action": proposal["action"],
         "decision": decision.decision,
         "executed": execution_success,
-        "timestamp": decision.dict().get("timestamp", "")
+        "timestamp": datetime.now().isoformat()
     }
     
-    # Publish to Redis if available
-    if redis_client:
-        try:
-            redis_client.publish("trade_logs", json.dumps(log_entry))
-        except Exception as e:
-            print(f"Redis publish error: {e}")
+    redis_client.publish("trade_logs", json.dumps(log_entry))
+    
+    await manager.broadcast({
+        'type': 'trade_logs',
+        'data': log_entry
+    })
+    
+    updated_proposal = await db.get_trade_proposal(decision.proposal_id)
+    await manager.broadcast({
+        'type': 'proposal_updated',
+        'data': updated_proposal
+    })
     
     result = {"status": "decision recorded", "decision": decision.decision}
     if decision.decision == "APPROVED":
@@ -150,8 +234,9 @@ async def submit_decision(decision: TradeDecision):
     
     return result
 
-@app.get("/decisions", response_model=List[dict])
-async def get_decisions():
+@app.get("/decisions")
+async def get_decisions(user_id: str = Depends(get_user_id)):
+    decisions = await db.get_trade_decisions(user_id)
     return decisions
 
 @app.get("/ai-status")
@@ -165,39 +250,96 @@ async def get_ai_status():
         }
     return {"status": "not initialized"}
 
+@app.get("/dashboard-stats")
+async def get_dashboard_stats(user_id: str = Depends(get_user_id)):
+    """Get dashboard statistics for the user"""
+    active_proposals = await db.get_active_proposals(user_id)
+    portfolio_summary = await db.get_user_portfolio_summary(user_id)
+    executions = await db.get_trade_executions(user_id)
+    
+    today_executions = [
+        ex for ex in executions 
+        if ex.get('executed_at') and ex['executed_at'].startswith(datetime.now().strftime('%Y-%m-%d'))
+    ]
+    
+    return {
+        "active_proposals": len(active_proposals),
+        "executed_trades_today": len(today_executions),
+        "total_trades": portfolio_summary.get("total_trades", 0),
+        "total_trade_volume": float(portfolio_summary.get("total_trade_volume", 0)),
+        "buy_trades": portfolio_summary.get("buy_trades", 0),
+        "sell_trades": portfolio_summary.get("sell_trades", 0)
+    }
+
+@app.get("/recent-activity")
+async def get_recent_activity(limit: int = 10, user_id: str = Depends(get_user_id)):
+    """Get recent trading activity"""
+    activity = await db.get_recent_activity(user_id, limit)
+    return activity
+
 @app.get("/account")
 async def get_account_info():
     ai_engine = get_ai_engine()
-    if ai_engine:
-        try:
-            account = ai_engine.trading_client.get_account()
-            return {
-                "account_id": account.id,
-                "buying_power": float(account.buying_power),
-                "cash": float(account.cash),
-                "portfolio_value": float(account.portfolio_value),
-                "status": account.status
-            }
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to get account info: {e}")
-    raise HTTPException(status_code=503, detail="AI Engine not initialized")
+    account = ai_engine.trading_client.get_account()
+    return {
+        "account_id": account.id,
+        "buying_power": float(account.buying_power),
+        "cash": float(account.cash),
+        "portfolio_value": float(account.portfolio_value),
+        "status": account.status
+    }
 
 @app.post("/ai-control")
 async def control_ai_engine(action: str):
     ai_engine = get_ai_engine()
-    if not ai_engine:
-        raise HTTPException(status_code=503, detail="AI Engine not initialized")
     
     if action == "start":
         if not ai_engine.is_running:
-            task = asyncio.create_task(ai_engine.start())
+            asyncio.create_task(ai_engine.start())
             return {"status": "AI Engine started"}
         return {"status": "AI Engine already running"}
     elif action == "stop":
         ai_engine.stop()
         return {"status": "AI Engine stopped"}
     else:
-        raise HTTPException(status_code=400, detail="Invalid action. Use 'start' or 'stop'")
+        return {"status": "Invalid action"}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates"""
+    await manager.connect(websocket)
+    print(f"WebSocket client connected. Total connections: {len(manager.active_connections)}")
+    
+    try:
+        # Send initial connection confirmation
+        await manager.send_message(websocket, {
+            'type': 'connection',
+            'data': {'status': 'connected', 'message': 'Real-time updates active'}
+        })
+        
+        # Keep connection alive and handle incoming messages
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message.get('type') == 'ping':
+                await manager.send_message(websocket, {
+                    'type': 'pong',
+                    'data': {'timestamp': datetime.now().isoformat()}
+                })
+            elif message.get('type') == 'subscribe':
+                await manager.send_message(websocket, {
+                    'type': 'subscription',
+                    'data': {'status': 'subscribed', 'channels': ['trade_proposals', 'trade_logs']}
+                })
+                
+    except WebSocketDisconnect:
+        print("WebSocket client disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+    finally:
+        manager.disconnect(websocket)
+        print(f"WebSocket client removed. Total connections: {len(manager.active_connections)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

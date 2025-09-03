@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, AuthError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { setAuthToken } from '@/lib/api'
 
 interface AuthContextType {
   user: User | null
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user || null)
+      setAuthToken(session?.access_token || null)
       setLoading(false)
     }
 
@@ -32,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setUser(session?.user || null)
+        setAuthToken(session?.access_token || null)
         setLoading(false)
       }
     )
