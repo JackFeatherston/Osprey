@@ -34,16 +34,29 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
     if (checking) return;
     
     setChecking(true);
-    const healthCheck = await api.healthCheck();
-    setHealth(prev => ({
-      ...prev,
-      api: 'online',
-      redis: healthCheck.redis === 'connected' ? 'connected' : 'disconnected',
-      database: 'online',
-      websocket: websocketStatus || prev.websocket
-    }));
-    setLastCheck(new Date());
-    setChecking(false);
+    try {
+      const healthCheck = await api.healthCheck();
+      setHealth(prev => ({
+        ...prev,
+        api: 'online',
+        redis: healthCheck.redis === 'connected' ? 'connected' : 'disconnected',
+        database: 'online',
+        websocket: websocketStatus || prev.websocket
+      }));
+      setLastCheck(new Date());
+    } catch (error) {
+      console.error('Health check failed:', error);
+      setHealth(prev => ({
+        ...prev,
+        api: 'offline',
+        redis: 'disconnected',
+        database: 'offline',
+        websocket: websocketStatus || prev.websocket
+      }));
+      setLastCheck(new Date());
+    } finally {
+      setChecking(false);
+    }
   };
 
   // Update WebSocket status when prop changes
@@ -53,13 +66,13 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
     }
   }, [websocketStatus]);
 
-  // Check health on mount and periodically
+  // Check health on mount and periodically (less frequently to reduce load)
   useEffect(() => {
     checkSystemHealth();
     
-    const interval = setInterval(checkSystemHealth, 60000); // Check every minute
+    const interval = setInterval(checkSystemHealth, 120000); // Check every 2 minutes
     return () => clearInterval(interval);
-  }, [websocketStatus]);
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {

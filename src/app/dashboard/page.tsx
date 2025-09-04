@@ -39,8 +39,12 @@ export default function Dashboard() {
     return null
   }
 
-  // Show loading state while data is being fetched
-  if (dashboard.stats.loading && dashboard.proposals.loading && dashboard.account.loading) {
+  // Show loading state only if ALL data is loading (not individual components)
+  // This prevents infinite loading when some API calls fail
+  const isInitialLoad = dashboard.stats.loading && dashboard.proposals.loading && dashboard.account.loading && 
+    !dashboard.stats.error && !dashboard.proposals.error && !dashboard.account.error;
+  
+  if (isInitialLoad) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">Loading dashboard data...</div>
@@ -189,10 +193,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <SystemStatus 
-                websocketStatus={
-                  dashboard.realTime.isConnected ? 'connected' : 
-                  dashboard.realTime.connectionType === 'polling' ? 'connecting' : 'disconnected'
-                }
+                websocketStatus={dashboard.isConnected ? 'connected' : 'disconnected'}
               />
             </CardContent>
           </Card>

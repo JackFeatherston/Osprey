@@ -17,7 +17,7 @@ Before testing, ensure you have:
 
 ```bash
 # 1. Copy environment template
-cp .env.example .env.local
+cp .env.local
 
 # 2. Update .env.local with your actual values
 # - Supabase URL and keys

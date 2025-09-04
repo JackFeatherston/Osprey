@@ -60,12 +60,12 @@ async def require_auth(current_user: Optional[Dict[str, Any]] = Depends(get_curr
 
 async def get_user_id(authorization: Optional[str] = Header(None)) -> str:
     """
-    Get user ID from authorization header or return default for development
+    Get user ID from authorization header or return consistent development UUID
     """
     user = await get_current_user(authorization)
     if user:
         return user["id"]
     
-    # For development/testing, return a default user ID
+    # For development/testing, return a consistent UUID
     # In production, this should require authentication
-    return "default-user"
+    return "d6c02463-eb2d-4d5a-9ba3-cc97d20910b3"
