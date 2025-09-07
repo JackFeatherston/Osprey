@@ -16,7 +16,6 @@ services:
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     depends_on:
       - backend
-      - redis
 
   backend:
     build:
@@ -28,20 +27,6 @@ services:
       # Mount backend source code for hot reload
       - ./backend:/app
     environment:
-      - REDIS_URL=redis://redis:6379
       - PYTHONPATH=/app
-    depends_on:
-      - redis
     env_file:
       - .env
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-
-volumes:
-  redis_data:

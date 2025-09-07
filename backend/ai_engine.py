@@ -6,11 +6,10 @@ Lightweight implementation optimized for EC2 free tier (1GB RAM).
 import asyncio
 import json
 import uuid
-import redis
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 from alpaca.data import StockHistoricalDataClient, StockBarsRequest, TimeFrame
 from alpaca.data.live import StockDataStream
 from alpaca.trading import TradingClient, MarketOrderRequest, OrderSide
@@ -119,11 +118,11 @@ class RSIStrategy(TradingStrategy):
 class AIEngine:
     """Main AI Engine for trade analysis and proposal generation"""
     
-    def __init__(self, alpaca_api_key: str, alpaca_secret_key: str, redis_client: Optional[redis.Redis] = None, supabase_client=None):
+    def __init__(self, alpaca_api_key: str, alpaca_secret_key: str, supabase_client=None, websocket_manager=None):
         self.alpaca_api_key = alpaca_api_key
         self.alpaca_secret_key = alpaca_secret_key
-        self.redis_client = redis_client
         self.supabase_client = supabase_client
+        self.websocket_manager = websocket_manager
         
         # List of user IDs to generate proposals for
         # In production, this could be fetched from user settings or all active users
@@ -204,12 +203,22 @@ class AIEngine:
             await self._store_proposal(proposal_data)
     
     async def _store_proposal(self, proposal_data: Dict):
-        """Store a single proposal in database and broadcast"""
+        """Store a single proposal in database and broadcast via WebSocket"""
         if self.supabase_client:
             created_proposal = await self.supabase_client.create_trade_proposal(proposal_data)
-            self.redis_client.publish("trade_proposals", json.dumps(created_proposal))
+            # Broadcast to WebSocket clients directly
+            if self.websocket_manager:
+                await self.websocket_manager.broadcast({
+                    'type': 'trade_proposals',
+                    'data': created_proposal
+                })
         else:
-            self.redis_client.publish("trade_proposals", json.dumps(proposal_data))
+            # Fallback: broadcast proposal data directly if no database
+            if self.websocket_manager:
+                await self.websocket_manager.broadcast({
+                    'type': 'trade_proposals',
+                    'data': proposal_data
+                })
     
     def add_target_user(self, user_id: str):
         """Add a user to receive trade proposals"""
@@ -247,7 +256,13 @@ class AIEngine:
             "timestamp": datetime.now().isoformat()
         }
         
-        self.redis_client.publish("trade_logs", json.dumps(execution_log))
+        # Broadcast execution log via WebSocket
+        if self.websocket_manager:
+            await self.websocket_manager.broadcast({
+                'type': 'trade_logs',
+                'data': execution_log
+            })
+        
         return True
 
 # Singleton instance for the AI engine
@@ -257,8 +272,8 @@ def get_ai_engine() -> Optional[AIEngine]:
     """Get the AI engine instance"""
     return ai_engine_instance
 
-def initialize_ai_engine(alpaca_api_key: str, alpaca_secret_key: str, redis_client: Optional[redis.Redis] = None, supabase_client=None):
+def initialize_ai_engine(alpaca_api_key: str, alpaca_secret_key: str, supabase_client=None, websocket_manager=None):
     """Initialize the AI engine singleton"""
     global ai_engine_instance
-    ai_engine_instance = AIEngine(alpaca_api_key, alpaca_secret_key, redis_client, supabase_client)
+    ai_engine_instance = AIEngine(alpaca_api_key, alpaca_secret_key, supabase_client, websocket_manager)
     return ai_engine_instance

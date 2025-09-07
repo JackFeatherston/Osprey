@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconne
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Set, Dict, Any
-import redis
 import json
 import uvicorn
 import asyncio
@@ -28,17 +27,13 @@ async def lifespan(app: FastAPI):
     
     if alpaca_api_key and alpaca_secret_key:
         print("Initializing AI Engine...")
-        ai_engine = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, redis_client, db)
+        ai_engine = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, db, manager)
         # Start AI engine in background
         ai_task = asyncio.create_task(ai_engine.start())
         app.state.ai_task = ai_task
         print("AI Engine started")
     else:
         print("Warning: Alpaca credentials not found. AI Engine disabled.")
-    
-    # Start Redis listener
-    global redis_listener_task
-    redis_listener_task = asyncio.create_task(redis_listener())
     
     yield
     
@@ -53,9 +48,6 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         print("AI Engine stopped")
-    
-    # Stop Redis listener
-    redis_listener_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -67,9 +59,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis client for pub/sub
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-redis_client = redis.from_url(redis_url, decode_responses=True)
 
 # Data models
 class TradeProposal(BaseModel):
@@ -112,26 +101,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Redis subscription for broadcasting updates
-redis_listener_task = None
-
-async def redis_listener():
-    """Listen to Redis pub/sub and broadcast to WebSocket clients"""
-    pubsub = redis_client.pubsub()
-    pubsub.subscribe('trade_proposals', 'trade_logs')
-    
-    while True:
-        message = pubsub.get_message(timeout=1.0)
-        if message and message['type'] == 'message':
-            channel = message['channel']
-            data = json.loads(message['data'])
-            
-            await manager.broadcast({
-                'type': channel,
-                'data': data
-            })
-            
-        await asyncio.sleep(0.1)
 
 @app.get("/")
 async def root():
@@ -139,8 +108,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    redis_status = "connected" if redis_client else "disconnected"
-    return {"status": "healthy", "redis": redis_status}
+    return {"status": "healthy"}
 
 @app.get("/proposals", response_model=List[TradeProposal])
 async def get_proposals(user_id: str = Depends(get_user_id)):
@@ -159,9 +127,7 @@ async def create_proposal(proposal: TradeProposal, user_id: str = Depends(get_us
     # Create proposal in database
     created_proposal = await db.create_trade_proposal(proposal_data)
     
-    # Publish to Redis and broadcast via WebSocket
-    redis_client.publish("trade_proposals", json.dumps(created_proposal))
-    
+    # Broadcast directly via WebSocket
     await manager.broadcast({
         'type': 'trade_proposals',
         'data': created_proposal
@@ -216,8 +182,7 @@ async def submit_decision(decision: TradeDecision):
         "timestamp": datetime.now().isoformat()
     }
     
-    redis_client.publish("trade_logs", json.dumps(log_entry))
-    
+    # Broadcast directly via WebSocket
     await manager.broadcast({
         'type': 'trade_logs',
         'data': log_entry
@@ -311,6 +276,8 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     print(f"WebSocket client connected. Total connections: {len(manager.active_connections)}")
     
+    user_id = None
+    
     try:
         # Send initial connection confirmation
         await manager.send_message(websocket, {
@@ -333,12 +300,43 @@ async def websocket_endpoint(websocket: WebSocket):
                     'type': 'subscription',
                     'data': {'status': 'subscribed', 'channels': ['trade_proposals', 'trade_logs']}
                 })
+            elif message.get('type') == 'auth' and message.get('token'):
+                # Handle authentication and add user to AI engine targets
+                try:
+                    # Verify token and get user
+                    from auth_middleware import verify_jwt_token
+                    user = await verify_jwt_token(message['token'])
+                    user_id = user.get('sub') if user else None
+                    
+                    # Add user to AI engine targets
+                    ai_engine = get_ai_engine()
+                    if ai_engine and user_id:
+                        ai_engine.add_target_user(user_id)
+                        print(f"Added user {user_id} to AI engine targets")
+                        
+                        await manager.send_message(websocket, {
+                            'type': 'auth_success',
+                            'data': {'user_id': user_id, 'message': 'Authenticated and subscribed to AI proposals'}
+                        })
+                except Exception as e:
+                    print(f"WebSocket auth error: {e}")
+                    await manager.send_message(websocket, {
+                        'type': 'auth_error',
+                        'data': {'error': 'Authentication failed'}
+                    })
                 
     except WebSocketDisconnect:
         print("WebSocket client disconnected")
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
+        # Remove user from AI engine targets when disconnecting
+        if user_id:
+            ai_engine = get_ai_engine()
+            if ai_engine:
+                ai_engine.remove_target_user(user_id)
+                print(f"Removed user {user_id} from AI engine targets")
+        
         manager.disconnect(websocket)
         print(f"WebSocket client removed. Total connections: {len(manager.active_connections)}")
 

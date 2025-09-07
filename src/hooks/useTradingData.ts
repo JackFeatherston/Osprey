@@ -10,19 +10,6 @@ export function useTradeProposals() {
   
   const webSocket = useWebSocket();
 
-  // Handle incoming WebSocket messages from backend
-  useEffect(() => {
-    webSocket.setOnMessage((message) => {
-      if (message.type === 'trade_proposal') {
-        setProposals(prev => [message.data, ...prev]);
-      } else if (message.type === 'proposal_updated') {
-        setProposals(prev => 
-          prev.map(p => p.id === message.data.id ? message.data : p)
-        );
-      }
-    });
-  }, [webSocket]);
-
   // Fetch initial proposals from API
   const fetchProposals = useCallback(async () => {
     try {
@@ -36,6 +23,22 @@ export function useTradeProposals() {
       setLoading(false);
     }
   }, []);
+
+  // Handle incoming WebSocket messages from backend  
+  useEffect(() => {
+    webSocket.setOnMessage((message) => {
+      if (message.type === 'trade_proposals') {
+        setProposals(prev => [message.data, ...prev]);
+      } else if (message.type === 'proposal_updated') {
+        setProposals(prev => 
+          prev.map(p => p.id === message.data.id ? message.data : p)
+        );
+      } else if (message.type === 'trade_logs') {
+        // Handle trade execution updates - refresh proposals to show status changes
+        fetchProposals();
+      }
+    });
+  }, [webSocket, fetchProposals]);
 
   // Submit approve/reject decision - core workflow function
   const submitDecision = useCallback(async (proposalId: string, decision: 'APPROVED' | 'REJECTED', notes?: string) => {
