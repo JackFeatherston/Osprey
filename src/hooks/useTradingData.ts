@@ -64,8 +64,7 @@ export function useTradeProposals() {
     error,
     submitDecision,
     isConnected: webSocket.isConnected,
-    connectionState: webSocket.connectionState,
-    refetch: fetchProposals
+    connectionState: webSocket.connectionState
   };
 }
 

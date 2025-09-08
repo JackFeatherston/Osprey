@@ -6,12 +6,12 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTradeProposals } from '@/hooks/useTradingData'
 import TradeProposalsList from '@/components/TradeProposalsList'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
 export default function ProposalsPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
-  const { proposals, loading: proposalsLoading, error, refetch, submitDecision } = useTradeProposals()
+  const { proposals, loading: proposalsLoading, error, submitDecision } = useTradeProposals()
 
   useEffect(() => {
     if (!loading && !user) {
@@ -66,15 +66,6 @@ export default function ProposalsPage() {
             </div>
             
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={refetch}
-                disabled={proposalsLoading}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={`h-4 w-4 ${proposalsLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
               <Button onClick={handleSignOut} variant="outline">
                 Sign Out
               </Button>
