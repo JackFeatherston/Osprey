@@ -68,7 +68,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
     
     const interval = setInterval(checkSystemHealth, 120000); // Check every 2 minutes
     return () => clearInterval(interval);
-  }, []);
+  }, []); // Remove checkSystemHealth dependency
 
   const getStatusColor = (status: string) => {
     switch (status) {

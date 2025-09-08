@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, AccountInfo, RecentActivity, DashboardStats, AIStatus } from '@/lib/api';
-import { useWebSocket } from './useWebSocket';
+import { useWebSocketContext } from '@/contexts/WebSocketContext';
 
 // Core hook for trade proposals - matches CLAUDE.md workflow
 export function useTradeProposals() {
@@ -8,7 +8,7 @@ export function useTradeProposals() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const webSocket = useWebSocket();
+  const webSocket = useWebSocketContext();
 
   // Fetch initial proposals from API
   const fetchProposals = useCallback(async () => {
@@ -63,6 +63,7 @@ export function useTradeProposals() {
     loading,
     error,
     submitDecision,
+    refetch: fetchProposals,
     isConnected: webSocket.isConnected,
     connectionState: webSocket.connectionState
   };

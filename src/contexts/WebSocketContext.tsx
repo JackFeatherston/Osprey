@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+'use client'
+
+import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export interface WebSocketMessage {
@@ -8,7 +10,24 @@ export interface WebSocketMessage {
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-export function useWebSocket(url?: string) {
+interface WebSocketContextType {
+  isConnected: boolean;
+  connectionState: ConnectionState;
+  lastMessage: WebSocketMessage | null;
+  sendMessage: (message: any) => boolean;
+  setOnMessage: (handler: (message: WebSocketMessage) => void) => void;
+  reconnect: () => void;
+  disconnect: () => void;
+}
+
+const WebSocketContext = createContext<WebSocketContextType | null>(null);
+
+interface WebSocketProviderProps {
+  children: ReactNode;
+  url?: string;
+}
+
+export function WebSocketProvider({ children, url }: WebSocketProviderProps) {
   const wsUrl = useMemo(() => {
     if (url) return url;
     
@@ -241,10 +260,11 @@ export function useWebSocket(url?: string) {
     connect();
     
     return () => {
+      // Only cleanup on final unmount, not on page navigation
       isManualCloseRef.current = true;
       cleanupTimers();
       if (wsRef.current) {
-        wsRef.current.close(1000, 'Component unmount');
+        wsRef.current.close(1000, 'Provider unmount');
       }
     };
   }, [connect, cleanupTimers]);
@@ -264,7 +284,7 @@ export function useWebSocket(url?: string) {
     return () => subscription.unsubscribe();
   }, [connectionState, reconnect, disconnect]);
 
-  return {
+  const contextValue: WebSocketContextType = {
     isConnected: connectionState === 'connected',
     connectionState,
     lastMessage,
@@ -273,4 +293,18 @@ export function useWebSocket(url?: string) {
     reconnect,
     disconnect,
   };
+
+  return (
+    <WebSocketContext.Provider value={contextValue}>
+      {children}
+    </WebSocketContext.Provider>
+  );
+}
+
+export function useWebSocketContext(): WebSocketContextType {
+  const context = useContext(WebSocketContext);
+  if (!context) {
+    throw new Error('useWebSocketContext must be used within a WebSocketProvider');
+  }
+  return context;
 }
