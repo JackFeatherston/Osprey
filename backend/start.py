@@ -7,18 +7,6 @@ import subprocess
 import sys
 import os
 
-def check_redis():
-    """Check if Redis is running"""
-    try:
-        import redis
-        client = redis.Redis(host='localhost', port=6379, decode_responses=True)
-        client.ping()
-        print("✅ Redis is running")
-        return True
-    except Exception as e:
-        print(f"❌ Redis not available: {e}")
-        print("💡 Start Redis with: redis-server")
-        return False
 
 def check_env():
     """Check if environment variables are set"""

@@ -162,24 +162,6 @@ export default function Dashboard() {
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => dashboard.ai.startAI()}
-                    disabled={dashboard.ai.status?.status === 'running'}
-                  >
-                    Start
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => dashboard.ai.stopAI()}
-                    disabled={dashboard.ai.status?.status === 'stopped'}
-                  >
-                    Stop
-                  </Button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -193,7 +175,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <SystemStatus 
-                websocketStatus={dashboard.isConnected ? 'connected' : 'disconnected'}
+                websocketStatus={dashboard.connectionState || 'disconnected'}
               />
             </CardContent>
           </Card>

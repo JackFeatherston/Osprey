@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 
 interface SystemHealth {
   api: 'online' | 'offline' | 'error';
-  redis: 'connected' | 'disconnected';
   database: 'online' | 'offline' | 'error';
   websocket: 'connected' | 'disconnected' | 'connecting' | 'error';
 }
@@ -23,7 +22,6 @@ interface SystemStatusProps {
 export function SystemStatus({ websocketStatus, className, compact = false }: SystemStatusProps) {
   const [health, setHealth] = useState<SystemHealth>({
     api: 'offline',
-    redis: 'disconnected',
     database: 'offline',
     websocket: websocketStatus || 'disconnected'
   });
@@ -39,7 +37,6 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
       setHealth(prev => ({
         ...prev,
         api: 'online',
-        redis: healthCheck.redis === 'connected' ? 'connected' : 'disconnected',
         database: 'online',
         websocket: websocketStatus || prev.websocket
       }));
@@ -49,7 +46,6 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
       setHealth(prev => ({
         ...prev,
         api: 'offline',
-        redis: 'disconnected',
         database: 'offline',
         websocket: websocketStatus || prev.websocket
       }));
@@ -149,7 +145,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
         </span>
       </div>
       
-      <div className="grid grid-cols-2 gap-2 text-sm">
+      <div className="grid grid-row-3 gap-2 text-sm">
         {/* API Status */}
         <div className="flex items-center justify-between">
           <span className="text-gray-600">API</span>
@@ -168,14 +164,6 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
           </Badge>
         </div>
 
-        {/* Redis Status */}
-        <div className="flex items-center justify-between">
-          <span className="text-gray-600">Redis</span>
-          <Badge variant="outline" className={getStatusColor(health.redis)}>
-            {getStatusIcon('redis', health.redis)}
-            <span className="ml-1 capitalize">{health.redis}</span>
-          </Badge>
-        </div>
 
         {/* WebSocket Status */}
         <div className="flex items-center justify-between">

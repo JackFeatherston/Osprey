@@ -64,6 +64,7 @@ export function useTradeProposals() {
     error,
     submitDecision,
     isConnected: webSocket.isConnected,
+    connectionState: webSocket.connectionState,
     refetch: fetchProposals
   };
 }
@@ -122,15 +123,7 @@ export function useAIStatus() {
       .finally(() => setLoading(false));
   }, []);
 
-  const startAI = useCallback(async () => {
-    await api.startAI();
-  }, []);
-
-  const stopAI = useCallback(async () => {
-    await api.stopAI();
-  }, []);
-
-  return { status, loading, error, startAI, stopAI };
+  return { status, loading, error };
 }
 
 // Simple hook for recent activity
@@ -174,6 +167,7 @@ export function useDashboard() {
     activity,
     stats,
     ai,
-    isConnected: proposals.isConnected
+    isConnected: proposals.isConnected,
+    connectionState: proposals.connectionState
   };
 }

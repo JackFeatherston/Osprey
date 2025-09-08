@@ -108,7 +108,11 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "websocket_connections": len(manager.active_connections),
+        "timestamp": datetime.now().isoformat()
+    }
 
 @app.get("/proposals", response_model=List[TradeProposal])
 async def get_proposals(user_id: str = Depends(get_user_id)):
@@ -255,20 +259,6 @@ async def get_account_info():
         "status": account.status
     }
 
-@app.post("/ai-control")
-async def control_ai_engine(action: str):
-    ai_engine = get_ai_engine()
-    
-    if action == "start":
-        if not ai_engine.is_running:
-            asyncio.create_task(ai_engine.start())
-            return {"status": "AI Engine started"}
-        return {"status": "AI Engine already running"}
-    elif action == "stop":
-        ai_engine.stop()
-        return {"status": "AI Engine stopped"}
-    else:
-        return {"status": "Invalid action"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -293,7 +283,10 @@ async def websocket_endpoint(websocket: WebSocket):
             if message.get('type') == 'ping':
                 await manager.send_message(websocket, {
                     'type': 'pong',
-                    'data': {'timestamp': datetime.now().isoformat()}
+                    'data': {
+                        'timestamp': datetime.now().isoformat(),
+                        'original_timestamp': message.get('timestamp')
+                    }
                 })
             elif message.get('type') == 'subscribe':
                 await manager.send_message(websocket, {
