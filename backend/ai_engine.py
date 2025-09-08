@@ -149,7 +149,7 @@ class AIEngine:
         
         while self.is_running:
             await self.analyze_markets()
-            await asyncio.sleep(300)
+            await asyncio.sleep(60)
     
     def stop(self):
         """Stop the AI engine"""
