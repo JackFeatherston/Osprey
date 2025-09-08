@@ -68,7 +68,8 @@ class TradeProposal(BaseModel):
     quantity: int
     price: float
     reason: str
-    timestamp: str
+    timestamp: Optional[str] = None
+    created_at: Optional[str] = None
 
 class TradeDecision(BaseModel):
     proposal_id: str

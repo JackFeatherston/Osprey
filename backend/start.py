@@ -30,17 +30,10 @@ def main():
     print("🚀 Starting Trading Assistant Backend...")
     
     # Check prerequisites
-    redis_ok = check_redis()
     env_ok = check_env()
     
     if not env_ok:
         print("\n⚠️  Environment not properly configured. Backend will run but AI engine will be disabled.")
-        response = input("Continue anyway? (y/N): ")
-        if response.lower() not in ['y', 'yes']:
-            sys.exit(1)
-    
-    if not redis_ok:
-        print("\n⚠️  Redis not available. Real-time features will be limited.")
         response = input("Continue anyway? (y/N): ")
         if response.lower() not in ['y', 'yes']:
             sys.exit(1)

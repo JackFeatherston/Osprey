@@ -132,13 +132,6 @@ export default function TradeProposalsList({
             <div className="text-center py-8">
               <TrendingUp className="h-12 w-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No proposals yet</h3>
-              <p className="text-gray-600 mb-4">
-                The AI trading engine will generate proposals based on market analysis. 
-                Make sure the AI engine is running and monitoring your watchlist.
-              </p>
-              <p className="text-sm text-gray-500">
-                Proposals will appear here automatically when trading opportunities are identified.
-              </p>
             </div>
           </CardContent>
         </Card>
