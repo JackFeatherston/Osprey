@@ -56,6 +56,13 @@ class SupabaseClient:
         result = self.client.table("trade_proposals").update({"status": status}).eq("id", proposal_id).execute()
         return len(result.data) > 0
     
+    async def clear_pending_proposals(self, user_id: str) -> int:
+        """Clear all pending proposals for a user by updating their status to EXPIRED"""
+        result = self.client.table("trade_proposals").update({
+            "status": "EXPIRED"
+        }).eq("user_id", user_id).eq("status", "PENDING").execute()
+        return len(result.data)
+    
     # Trade Decisions Methods
     
     async def create_trade_decision(self, decision_data: Dict[str, Any]) -> Dict[str, Any]:

@@ -33,6 +33,10 @@ export function useTradeProposals() {
         setProposals(prev => 
           prev.map(p => p.id === message.data.id ? message.data : p)
         );
+      } else if (message.type === 'proposals_cleared') {
+        // Clear pending proposals from local state when cleared on server
+        setProposals(prev => prev.filter(p => p.status !== 'PENDING'));
+        console.log(`${message.data.cleared_count} proposals cleared`);
       } else if (message.type === 'trade_logs') {
         // Handle trade execution updates - refresh proposals to show status changes
         fetchProposals();
@@ -58,11 +62,23 @@ export function useTradeProposals() {
     fetchProposals();
   }, [fetchProposals]);
 
+  // Clear all pending proposals manually
+  const clearProposals = useCallback(async () => {
+    try {
+      await api.clearProposals();
+      // Local state will be updated via WebSocket message
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear proposals');
+      throw err;
+    }
+  }, []);
+
   return {
     proposals,
     loading,
     error,
     submitDecision,
+    clearProposals,
     refetch: fetchProposals,
     isConnected: webSocket.isConnected,
     connectionState: webSocket.connectionState

@@ -117,7 +117,7 @@ async def health_check():
 
 @app.get("/proposals", response_model=List[TradeProposal])
 async def get_proposals(user_id: str = Depends(get_user_id)):
-    proposals = await db.get_trade_proposals(user_id=user_id)
+    proposals = await db.get_trade_proposals(user_id=user_id, status="PENDING")
     return proposals
 
 @app.post("/proposals")
@@ -259,6 +259,19 @@ async def get_account_info():
         "portfolio_value": float(account.portfolio_value),
         "status": account.status
     }
+
+@app.delete("/proposals/clear")
+async def clear_user_proposals(user_id: str = Depends(get_user_id)):
+    """Clear all pending proposals for the user"""
+    cleared_count = await db.clear_pending_proposals(user_id)
+    
+    # Broadcast the clearing to connected clients
+    await manager.broadcast({
+        'type': 'proposals_cleared',
+        'data': {'user_id': user_id, 'cleared_count': cleared_count}
+    })
+    
+    return {"status": "proposals cleared", "count": cleared_count}
 
 
 @app.websocket("/ws")

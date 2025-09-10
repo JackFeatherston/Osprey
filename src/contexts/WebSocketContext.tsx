@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 export interface WebSocketMessage {
   type: string;
@@ -271,18 +272,64 @@ export function WebSocketProvider({ children, url }: WebSocketProviderProps) {
 
   // Monitor auth state changes and reconnect if needed
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === 'SIGNED_IN' && connectionState === 'disconnected') {
         console.log('Auth state changed to signed in - reconnecting WebSocket');
         reconnect();
       } else if (event === 'SIGNED_OUT') {
-        console.log('Auth state changed to signed out - disconnecting WebSocket');
+        console.log('Auth state changed to signed out - clearing proposals and disconnecting WebSocket');
+        // Clear proposals when user signs out
+        try {
+          await api.clearProposals();
+          console.log('Proposals cleared on sign out');
+        } catch (error) {
+          console.error('Failed to clear proposals on sign out:', error);
+        }
         disconnect();
       }
     });
 
     return () => subscription.unsubscribe();
   }, [connectionState, reconnect, disconnect]);
+
+  // Handle app close/refresh to clear proposals
+  useEffect(() => {
+    const clearProposalsOnExit = () => {
+      // Use synchronous approach with fetch keepalive for page unload
+      try {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        fetch(`${API_BASE_URL}/proposals/clear`, {
+          method: 'DELETE',
+          keepalive: true, // This helps ensure the request completes even if the page unloads
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }).catch(() => {
+          // Ignore errors during page unload
+        });
+      } catch (error) {
+        // Ignore errors during page unload
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      clearProposalsOnExit();
+    };
+
+    const handlePageHide = () => {
+      clearProposalsOnExit();
+    };
+
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      // Cleanup event listeners
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, []);
 
   const contextValue: WebSocketContextType = {
     isConnected: connectionState === 'connected',
