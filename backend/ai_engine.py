@@ -24,96 +24,11 @@ class TradingStrategy:
     def __init__(self, name: str):
         self.name = name
     
-    def analyze(self, data: pd.DataFrame, symbol: str) -> Optional[Dict]:
+    async def analyze(self, data: pd.DataFrame, symbol: str) -> Optional[Dict]:
         """Analyze data and return trade signal if any"""
         raise NotImplementedError
 
-class MovingAverageCrossover(TradingStrategy):
-    """Simple moving average crossover strategy"""
-    
-    def __init__(self, short_window: int = 20, long_window: int = 50):
-        super().__init__("MA_Crossover")
-        self.short_window = short_window
-        self.long_window = long_window
-    
-    def analyze(self, data: pd.DataFrame, symbol: str) -> Optional[Dict]:
-        if len(data) < self.long_window:
-            return None
-        
-        # Calculate moving averages
-        data['MA_short'] = data['close'].rolling(window=self.short_window).mean()
-        data['MA_long'] = data['close'].rolling(window=self.long_window).mean()
-        
-        # Get latest values
-        current_short = data['MA_short'].iloc[-1]
-        current_long = data['MA_long'].iloc[-1]
-        prev_short = data['MA_short'].iloc[-2]
-        prev_long = data['MA_long'].iloc[-2]
-        current_price = data['close'].iloc[-1]
-        
-        # Check for crossover
-        if prev_short <= prev_long and current_short > current_long:
-            # Bullish crossover
-            return {
-                "action": "BUY",
-                "price": float(current_price),
-                "quantity": 10, 
-                "reason": f"Bullish MA crossover: {self.short_window}-day MA (${current_short:.2f}) crossed above {self.long_window}-day MA (${current_long:.2f})"
-            }
-        elif prev_short >= prev_long and current_short < current_long:
-            # Bearish crossover
-            return {
-                "action": "SELL",
-                "price": float(current_price),
-                "quantity": 10,
-                "reason": f"Bearish MA crossover: {self.short_window}-day MA (${current_short:.2f}) crossed below {self.long_window}-day MA (${current_long:.2f})"
-            }
-        
-        return None
-
-class RSIStrategy(TradingStrategy):
-    """RSI-based strategy"""
-    
-    def __init__(self, period: int = 14, oversold: float = 30, overbought: float = 70):
-        super().__init__("RSI")
-        self.period = period
-        self.oversold = oversold
-        self.overbought = overbought
-    
-    def calculate_rsi(self, prices: pd.Series) -> pd.Series:
-        """Calculate RSI"""
-        delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-    
-    def analyze(self, data: pd.DataFrame, symbol: str) -> Optional[Dict]:
-        if len(data) < self.period + 1:
-            return None
-        
-        # Calculate RSI
-        data['RSI'] = self.calculate_rsi(data['close'])
-        current_rsi = data['RSI'].iloc[-1]
-        current_price = data['close'].iloc[-1]
-        
-        if current_rsi < self.oversold:
-            return {
-                "action": "BUY",
-                "price": float(current_price),
-                "quantity": 10,
-                "reason": f"RSI oversold signal: RSI={current_rsi:.2f} below {self.oversold}"
-            }
-        elif current_rsi > self.overbought:
-            return {
-                "action": "SELL",
-                "price": float(current_price),
-                "quantity": 10,
-                "reason": f"RSI overbought signal: RSI={current_rsi:.2f} above {self.overbought}"
-            }
-        
-        return None
+# Legacy strategies removed - replaced with SentimentEnhancedStrategy
 
 class AIEngine:
     """Main AI Engine for trade analysis and proposal generation"""
@@ -133,9 +48,9 @@ class AIEngine:
         self.trading_client = TradingClient(alpaca_api_key, alpaca_secret_key, paper=True)  # Paper trading
         
         # Initialize strategies
+        from ai_trading_strategy import SentimentEnhancedStrategy
         self.strategies = [
-            MovingAverageCrossover(short_window=20, long_window=50),
-            RSIStrategy(period=14)
+            SentimentEnhancedStrategy()
         ]
         
         # Watchlist of symbols to monitor
@@ -191,7 +106,7 @@ class AIEngine:
                     if len(df) > 0:
                         success = True
                         for strategy in self.strategies:
-                            signal = strategy.analyze(df, symbol)
+                            signal = await strategy.analyze(df, symbol)
                             if signal:
                                 logger.info(f"Generated real trade signal for {symbol}: {signal}")
                                 await self.generate_proposal(symbol, signal, strategy.name)
@@ -243,7 +158,7 @@ class AIEngine:
                             if len(daily_df) > 10:  # Need sufficient data for analysis
                                 success = True
                                 for strategy in self.strategies:
-                                    signal = strategy.analyze(daily_df, symbol)
+                                    signal = await strategy.analyze(daily_df, symbol)
                                     if signal:
                                         logger.info(f"Generated real trade signal for {symbol} using hourly->daily data: {signal}")
                                         await self.generate_proposal(symbol, signal, strategy.name)

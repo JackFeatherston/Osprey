@@ -28,12 +28,13 @@ async def lifespan(app: FastAPI):
     if alpaca_api_key and alpaca_secret_key:
         print("Initializing AI Engine...")
         ai_engine = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, db, manager)
-        # Start AI engine in background
-        ai_task = asyncio.create_task(ai_engine.start())
-        app.state.ai_task = ai_task
-        print("AI Engine started")
+        print("AI Engine initialized, starting background task...")
+        # Start AI engine in background after yield to avoid blocking startup
+        app.state.ai_engine = ai_engine
+        app.state.should_start_ai = True
     else:
         print("Warning: Alpaca credentials not found. AI Engine disabled.")
+        app.state.should_start_ai = False
     
     yield
     
@@ -51,9 +52,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Start AI engine after app is ready
+@app.on_event("startup")
+async def start_ai_engine():
+    if getattr(app.state, 'should_start_ai', False):
+        ai_engine = getattr(app.state, 'ai_engine', None)
+        if ai_engine:
+            print("Starting AI Engine in background...")
+            ai_task = asyncio.create_task(ai_engine.start())
+            app.state.ai_task = ai_task
+            print("AI Engine background task started")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
