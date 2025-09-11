@@ -67,50 +67,6 @@ export default function Dashboard() {
 
         {/* Stats Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Proposals</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {dashboard.stats.loading ? '...' : dashboard.stats.stats?.active_proposals ?? 0}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Awaiting your decision
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Trades Today</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {dashboard.stats.loading ? '...' : dashboard.stats.stats?.executed_trades_today ?? 0}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Successfully executed
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Trades</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {dashboard.stats.loading ? '...' : dashboard.stats.stats?.total_trades ?? 0}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                All time
-              </p>
-            </CardContent>
-          </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

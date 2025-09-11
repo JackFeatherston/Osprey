@@ -101,7 +101,8 @@ class NewsFetcher:
         if self.use_api:
             articles = await self._fetch_from_newsapi(symbol, max_articles)
         else:
-            articles = await self._fetch_fallback_news(symbol, max_articles)
+            logger.warning(f"NEWSAPI_KEY not found. No articles available for {symbol}")
+            articles = []
         
         # Cache the results
         if articles:
@@ -156,32 +157,6 @@ class NewsFetcher:
             logger.error(f"Error fetching news from NewsAPI for {symbol}: {e}")
             return []
     
-    async def _fetch_fallback_news(self, symbol: str, max_articles: int) -> List[NewsArticle]:
-        """Fallback method using free news sources"""
-        # Create some realistic sample news for demonstration
-        # In production, you could use RSS feeds or other free sources
-        sample_headlines = [
-            f"{symbol} shows strong quarterly performance with earnings beat",
-            f"Analysts upgrade {symbol} price target following positive outlook",
-            f"{symbol} stock gains momentum in pre-market trading",
-            f"Market volatility impacts {symbol} trading volume",
-            f"Institutional investors increase {symbol} holdings"
-        ]
-        
-        articles = []
-        current_time = datetime.now()
-        
-        for i, headline in enumerate(sample_headlines[:max_articles]):
-            articles.append(NewsArticle(
-                title=headline,
-                description=f"Recent market analysis and trading activity for {symbol}.",
-                url="",
-                published_at=(current_time - timedelta(hours=i)).isoformat(),
-                source="Market Analysis"
-            ))
-        
-        logger.info(f"Generated {len(articles)} fallback news articles for {symbol}")
-        return articles
     
     async def _rate_limit(self):
         """Simple rate limiting to avoid hitting API limits"""

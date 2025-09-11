@@ -61,8 +61,10 @@ class SentimentEnhancedStrategy(TradingStrategy):
             
             # Check if we have enough news data
             if sentiment_summary["article_count"] < self.min_articles:
-                logger.info(f"Insufficient news articles for {symbol} ({sentiment_summary['article_count']} articles)")
-                return None
+                logger.info(f"Insufficient news articles for {symbol} ({sentiment_summary['article_count']} articles), proceeding with technical analysis only")
+                # Use neutral sentiment and continue with technical analysis only
+                sentiment_score = 0.0
+                sentiment_summary = {"article_count": 0, "avg_confidence": 0.0}
             
             # Generate trade signal based on combined analysis
             signal = await self._generate_trade_signal(
@@ -189,17 +191,27 @@ class SentimentEnhancedStrategy(TradingStrategy):
         action = None
         quantity = 10  # Default quantity
         
-        # Buy signal criteria
-        if (sentiment_score > self.sentiment_threshold and 
-            technical_score > 0.1 and 
-            combined_score > 0.25):
-            action = "BUY"
-            
-        # Sell signal criteria  
-        elif (sentiment_score < -self.sentiment_threshold and 
-              technical_score < -0.1 and 
-              combined_score < -0.25):
-            action = "SELL"
+        # If no news data available, use technical analysis only
+        if sentiment_summary.get("article_count", 0) == 0:
+            logger.info(f"Using technical analysis only for {symbol}")
+            # Technical-only signal criteria (more conservative)
+            if technical_score > 0.3:  # Higher threshold for technical-only
+                action = "BUY"
+            elif technical_score < -0.3:
+                action = "SELL"
+        else:
+            # Combined sentiment + technical analysis
+            # Buy signal criteria
+            if (sentiment_score > self.sentiment_threshold and 
+                technical_score > 0.1 and 
+                combined_score > 0.25):
+                action = "BUY"
+                
+            # Sell signal criteria  
+            elif (sentiment_score < -self.sentiment_threshold and 
+                  technical_score < -0.1 and 
+                  combined_score < -0.25):
+                action = "SELL"
         
         if not action:
             logger.info(f"No trade signal for {symbol}: sentiment={sentiment_score:.3f}, "

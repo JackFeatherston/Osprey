@@ -285,6 +285,30 @@ async def clear_user_proposals(user_id: str = Depends(get_user_id)):
     
     return {"status": "proposals cleared", "count": cleared_count}
 
+@app.post("/ai-engine/start")
+async def start_ai_engine_manual():
+    """Manually start the AI engine"""
+    ai_engine = get_ai_engine()
+    if ai_engine:
+        if not ai_engine.is_running:
+            print("Manually starting AI Engine...")
+            ai_task = asyncio.create_task(ai_engine.start())
+            app.state.ai_task = ai_task
+            return {"status": "AI engine started"}
+        else:
+            return {"status": "AI engine already running"}
+    return {"status": "AI engine not initialized"}
+
+@app.post("/ai-engine/stop") 
+async def stop_ai_engine_manual():
+    """Manually stop the AI engine"""
+    ai_engine = get_ai_engine()
+    if ai_engine:
+        ai_engine.stop()
+        if hasattr(app.state, 'ai_task'):
+            app.state.ai_task.cancel()
+        return {"status": "AI engine stopped"}
+    return {"status": "AI engine not initialized"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
