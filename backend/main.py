@@ -29,12 +29,14 @@ async def lifespan(app: FastAPI):
         print("Initializing AI Engine...")
         ai_engine = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, db, manager)
         print("AI Engine initialized, starting background task...")
-        # Start AI engine in background after yield to avoid blocking startup
+        
+        # Start AI engine immediately in background
+        ai_task = asyncio.create_task(ai_engine.start())
         app.state.ai_engine = ai_engine
-        app.state.should_start_ai = True
+        app.state.ai_task = ai_task
+        print("AI Engine background task started")
     else:
         print("Warning: Alpaca credentials not found. AI Engine disabled.")
-        app.state.should_start_ai = False
     
     yield
     
@@ -51,17 +53,6 @@ async def lifespan(app: FastAPI):
         print("AI Engine stopped")
 
 app = FastAPI(lifespan=lifespan)
-
-# Start AI engine after app is ready
-@app.on_event("startup")
-async def start_ai_engine():
-    if getattr(app.state, 'should_start_ai', False):
-        ai_engine = getattr(app.state, 'ai_engine', None)
-        if ai_engine:
-            print("Starting AI Engine in background...")
-            ai_task = asyncio.create_task(ai_engine.start())
-            app.state.ai_task = ai_task
-            print("AI Engine background task started")
 
 app.add_middleware(
     CORSMiddleware,
@@ -106,11 +97,24 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
     
     async def send_message(self, websocket: WebSocket, message: dict):
-        await websocket.send_text(json.dumps(message))
+        try:
+            await websocket.send_text(json.dumps(message))
+        except Exception as e:
+            print(f"Error sending message to WebSocket: {e}")
+            self.disconnect(websocket)
     
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            await connection.send_text(json.dumps(message))
+        disconnected_connections = []
+        for connection in self.active_connections.copy():
+            try:
+                await connection.send_text(json.dumps(message))
+            except Exception as e:
+                print(f"Error broadcasting to WebSocket: {e}")
+                disconnected_connections.append(connection)
+        
+        # Remove disconnected connections
+        for connection in disconnected_connections:
+            self.disconnect(connection)
 
 manager = ConnectionManager()
 
