@@ -9,7 +9,7 @@ Before testing, ensure you have:
 1. **Database Setup**: Supabase project with schema applied
 2. **Environment Variables**: All required variables in `.env.local`
 3. **API Keys**: Valid Alpaca paper trading credentials
-4. **Services Running**: Backend, frontend, and Redis
+4. **Services Running**: Backend, frontend
 
 ## Complete Testing Checklist
 
@@ -37,7 +37,6 @@ docker-compose up --build
 # Services will be available at:
 # - Frontend: http://localhost:3000
 # - Backend API: http://localhost:8000
-# - Redis: localhost:6379
 ```
 
 ### 3. Authentication Testing ✓

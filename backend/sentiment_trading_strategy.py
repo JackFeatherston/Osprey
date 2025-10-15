@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
-from ai_engine import TradingStrategy
+from market_analyzer import TradingStrategy
 from news_fetcher import get_news_fetcher, NewsArticle
 from finbert_news_analyzer import get_sentiment_analyzer
 
@@ -46,130 +46,112 @@ class SentimentEnhancedStrategy(TradingStrategy):
         if len(data) < self.price_change_window:
             logger.info(f"Insufficient price data for {symbol} ({len(data)} bars)")
             return None
-        
-        try:
-            # Get current market data
-            current_price = float(data['close'].iloc[-1])
-            current_volume = float(data['volume'].iloc[-1])
-            
-            # Calculate basic technical indicators
-            price_trend = self._calculate_price_trend(data)
-            volume_signal = self._calculate_volume_signal(data)
-            
-            # Get news sentiment
-            sentiment_score, sentiment_summary = await self._get_sentiment_analysis(symbol)
-            
-            # Check if we have enough news data
-            if sentiment_summary["article_count"] < self.min_articles:
-                logger.info(f"Insufficient news articles for {symbol} ({sentiment_summary['article_count']} articles), proceeding with technical analysis only")
-                # Use neutral sentiment and continue with technical analysis only
-                sentiment_score = 0.0
-                sentiment_summary = {"article_count": 0, "avg_confidence": 0.0}
-            
-            # Generate trade signal based on combined analysis
-            signal = await self._generate_trade_signal(
-                symbol=symbol,
-                current_price=current_price,
-                price_trend=price_trend,
-                volume_signal=volume_signal,
-                sentiment_score=sentiment_score,
-                sentiment_summary=sentiment_summary
-            )
-            
-            return signal
-            
-        except Exception as e:
-            logger.error(f"Error analyzing {symbol}: {e}")
-            return None
+
+        # Get current market data
+        current_price = float(data['close'].iloc[-1])
+        current_volume = float(data['volume'].iloc[-1])
+
+        # Calculate basic technical indicators
+        price_trend = self._calculate_price_trend(data)
+        volume_signal = self._calculate_volume_signal(data)
+
+        # Get news sentiment
+        sentiment_score, sentiment_summary = await self._get_sentiment_analysis(symbol)
+
+        # Check if we have enough news data
+        if sentiment_summary["article_count"] < self.min_articles:
+            logger.info(f"Insufficient news articles for {symbol} ({sentiment_summary['article_count']} articles), proceeding with technical analysis only")
+            # Use neutral sentiment and continue with technical analysis only
+            sentiment_score = 0.0
+            sentiment_summary = {"article_count": 0, "avg_confidence": 0.0}
+
+        # Generate trade signal based on combined analysis
+        signal = await self._generate_trade_signal(
+            symbol=symbol,
+            current_price=current_price,
+            price_trend=price_trend,
+            volume_signal=volume_signal,
+            sentiment_score=sentiment_score,
+            sentiment_summary=sentiment_summary
+        )
+
+        return signal
     
     def _calculate_price_trend(self, data: pd.DataFrame) -> Dict:
         """Calculate price trend indicators"""
-        try:
-            # Short-term trend (5-day)
-            short_change = (data['close'].iloc[-1] - data['close'].iloc[-self.price_change_window]) / data['close'].iloc[-self.price_change_window]
-            
-            # Medium-term trend (if we have enough data)
-            if len(data) >= 20:
-                medium_change = (data['close'].iloc[-1] - data['close'].iloc[-20]) / data['close'].iloc[-20]
-            else:
-                medium_change = short_change
-            
-            # Simple moving average trend
-            if len(data) >= 10:
-                sma_10 = data['close'].rolling(window=10).mean().iloc[-1]
-                price_vs_sma = (data['close'].iloc[-1] - sma_10) / sma_10
-            else:
-                price_vs_sma = 0.0
-            
-            return {
-                "short_term_change": float(short_change),
-                "medium_term_change": float(medium_change),
-                "price_vs_sma": float(price_vs_sma)
-            }
-        except Exception as e:
-            logger.error(f"Error calculating price trend: {e}")
-            return {"short_term_change": 0.0, "medium_term_change": 0.0, "price_vs_sma": 0.0}
+        # Short-term trend (5-day)
+        short_change = (data['close'].iloc[-1] - data['close'].iloc[-self.price_change_window]) / data['close'].iloc[-self.price_change_window]
+
+        # Medium-term trend (if we have enough data)
+        if len(data) >= 20:
+            medium_change = (data['close'].iloc[-1] - data['close'].iloc[-20]) / data['close'].iloc[-20]
+        else:
+            medium_change = short_change
+
+        # Simple moving average trend
+        if len(data) >= 10:
+            sma_10 = data['close'].rolling(window=10).mean().iloc[-1]
+            price_vs_sma = (data['close'].iloc[-1] - sma_10) / sma_10
+        else:
+            price_vs_sma = 0.0
+
+        return {
+            "short_term_change": float(short_change),
+            "medium_term_change": float(medium_change),
+            "price_vs_sma": float(price_vs_sma)
+        }
     
     def _calculate_volume_signal(self, data: pd.DataFrame) -> Dict:
         """Calculate volume-based signals"""
-        try:
-            current_volume = data['volume'].iloc[-1]
-            
-            # Average volume over past periods
-            if len(data) >= 10:
-                avg_volume = data['volume'].rolling(window=10).mean().iloc[-2]  # Exclude current day
-                volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
-            else:
-                volume_ratio = 1.0
-            
-            # Volume trend
-            if len(data) >= 5:
-                recent_volume = data['volume'].iloc[-5:].mean()
-                older_volume = data['volume'].iloc[-10:-5].mean() if len(data) >= 10 else recent_volume
-                volume_trend = (recent_volume - older_volume) / older_volume if older_volume > 0 else 0.0
-            else:
-                volume_trend = 0.0
-            
-            return {
-                "volume_ratio": float(volume_ratio),
-                "volume_trend": float(volume_trend),
-                "is_volume_spike": volume_ratio > self.volume_multiplier
-            }
-        except Exception as e:
-            logger.error(f"Error calculating volume signal: {e}")
-            return {"volume_ratio": 1.0, "volume_trend": 0.0, "is_volume_spike": False}
+        current_volume = data['volume'].iloc[-1]
+
+        # Average volume over past periods
+        if len(data) >= 10:
+            avg_volume = data['volume'].rolling(window=10).mean().iloc[-2]  # Exclude current day
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+        else:
+            volume_ratio = 1.0
+
+        # Volume trend
+        if len(data) >= 5:
+            recent_volume = data['volume'].iloc[-5:].mean()
+            older_volume = data['volume'].iloc[-10:-5].mean() if len(data) >= 10 else recent_volume
+            volume_trend = (recent_volume - older_volume) / older_volume if older_volume > 0 else 0.0
+        else:
+            volume_trend = 0.0
+
+        return {
+            "volume_ratio": float(volume_ratio),
+            "volume_trend": float(volume_trend),
+            "is_volume_spike": volume_ratio > self.volume_multiplier
+        }
     
     async def _get_sentiment_analysis(self, symbol: str) -> Tuple[float, Dict]:
         """Get sentiment analysis for symbol with caching"""
         cache_key = f"{symbol}_{datetime.now().strftime('%Y%m%d_%H')}"  # Cache by hour
-        
+
         # Check cache
         if cache_key in self.sentiment_cache:
             cached_data = self.sentiment_cache[cache_key]
             if datetime.now() - cached_data['timestamp'] < self.cache_ttl:
                 return cached_data['sentiment_score'], cached_data['sentiment_summary']
-        
-        try:
-            # Fetch news articles
-            news_fetcher = await get_news_fetcher()
-            async with news_fetcher:
-                articles = await news_fetcher.get_news_for_symbol(symbol, max_articles=5)
-            
-            # Analyze sentiment
-            sentiment_score, sentiment_summary = await self.sentiment_analyzer.get_symbol_sentiment_score(articles)
-            
-            # Cache results
-            self.sentiment_cache[cache_key] = {
-                'sentiment_score': sentiment_score,
-                'sentiment_summary': sentiment_summary,
-                'timestamp': datetime.now()
-            }
-            
-            return sentiment_score, sentiment_summary
-            
-        except Exception as e:
-            logger.error(f"Error getting sentiment analysis for {symbol}: {e}")
-            return 0.0, {"article_count": 0, "avg_confidence": 0.0}
+
+        # Fetch news articles
+        news_fetcher = await get_news_fetcher()
+        async with news_fetcher:
+            articles = await news_fetcher.get_news_for_symbol(symbol, max_articles=5)
+
+        # Analyze sentiment
+        sentiment_score, sentiment_summary = await self.sentiment_analyzer.get_symbol_sentiment_score(articles)
+
+        # Cache results
+        self.sentiment_cache[cache_key] = {
+            'sentiment_score': sentiment_score,
+            'sentiment_summary': sentiment_summary,
+            'timestamp': datetime.now()
+        }
+
+        return sentiment_score, sentiment_summary
     
     async def _generate_trade_signal(self, 
                                    symbol: str,

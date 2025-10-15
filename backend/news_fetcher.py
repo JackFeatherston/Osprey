@@ -66,16 +66,13 @@ class NewsFetcher:
     
     def __init__(self):
         self.newsapi_key = os.getenv("NEWSAPI_KEY")
+        if not self.newsapi_key:
+            raise ValueError("NEWSAPI_KEY environment variable is required")
+
         self.cache = NewsCache(ttl_minutes=30)
         self.rate_limit_delay = 1.0  # Delay between API calls
         self.last_request_time = 0
         self.session: Optional[aiohttp.ClientSession] = None
-        
-        # Fallback to free news sources if no API key
-        self.use_api = bool(self.newsapi_key)
-        
-        if not self.use_api:
-            logger.warning("NEWSAPI_KEY not found. Using fallback news sources.")
     
     async def __aenter__(self):
         """Async context manager entry"""
@@ -94,68 +91,57 @@ class NewsFetcher:
         if cached_articles:
             logger.info(f"Using cached news for {symbol} ({len(cached_articles)} articles)")
             return cached_articles[:max_articles]
-        
-        # Fetch new articles
-        articles = []
-        
-        if self.use_api:
-            articles = await self._fetch_from_newsapi(symbol, max_articles)
-        else:
-            logger.warning(f"NEWSAPI_KEY not found. No articles available for {symbol}")
-            articles = []
-        
+
+        # Fetch new articles from NewsAPI
+        articles = await self._fetch_from_newsapi(symbol, max_articles)
+
         # Cache the results
         if articles:
             self.cache.set(symbol, articles)
             logger.info(f"Fetched and cached {len(articles)} articles for {symbol}")
-        
+
         return articles[:max_articles]
     
     async def _fetch_from_newsapi(self, symbol: str, max_articles: int) -> List[NewsArticle]:
         """Fetch news from NewsAPI"""
         if not self.session:
             return []
-        
-        try:
-            # Rate limiting
-            await self._rate_limit()
-            
-            # Search for company name + stock symbol
-            query = f"{symbol} stock OR {symbol} earnings OR {symbol} trading"
-            
-            url = "https://newsapi.org/v2/everything"
-            params = {
-                "q": query,
-                "language": "en",
-                "sortBy": "publishedAt",
-                "pageSize": max_articles,
-                "from": (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
-                "apiKey": self.newsapi_key
-            }
-            
-            async with self.session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    articles = []
-                    
-                    for article in data.get("articles", []):
-                        if article.get("title") and article.get("description"):
-                            articles.append(NewsArticle(
-                                title=article["title"],
-                                description=article["description"] or "",
-                                url=article.get("url", ""),
-                                published_at=article.get("publishedAt", ""),
-                                source=article.get("source", {}).get("name", "Unknown")
-                            ))
-                    
-                    return articles
-                else:
-                    logger.warning(f"NewsAPI request failed with status {response.status}")
-                    return []
-        
-        except Exception as e:
-            logger.error(f"Error fetching news from NewsAPI for {symbol}: {e}")
-            return []
+
+        # Rate limiting
+        await self._rate_limit()
+
+        # Search for company name + stock symbol
+        query = f"{symbol} stock OR {symbol} earnings OR {symbol} trading"
+
+        url = "https://newsapi.org/v2/everything"
+        params = {
+            "q": query,
+            "language": "en",
+            "sortBy": "publishedAt",
+            "pageSize": max_articles,
+            "from": (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "apiKey": self.newsapi_key
+        }
+
+        async with self.session.get(url, params=params) as response:
+            if response.status != 200:
+                logger.warning(f"NewsAPI request failed with status {response.status}")
+                return []
+
+            data = await response.json()
+            articles = []
+
+            for article in data.get("articles", []):
+                if article.get("title") and article.get("description"):
+                    articles.append(NewsArticle(
+                        title=article["title"],
+                        description=article["description"] or "",
+                        url=article.get("url", ""),
+                        published_at=article.get("publishedAt", ""),
+                        source=article.get("source", {}).get("name", "Unknown")
+                    ))
+
+            return articles
     
     
     async def _rate_limit(self):
@@ -171,19 +157,15 @@ class NewsFetcher:
     async def get_news_for_symbols(self, symbols: List[str], max_articles: int = 3) -> Dict[str, List[NewsArticle]]:
         """Get news for multiple symbols efficiently"""
         results = {}
-        
+
         # Process symbols in batches to respect rate limits
         for symbol in symbols:
-            try:
-                articles = await self.get_news_for_symbol(symbol, max_articles)
-                results[symbol] = articles
-            except Exception as e:
-                logger.error(f"Error fetching news for {symbol}: {e}")
-                results[symbol] = []
-        
+            articles = await self.get_news_for_symbol(symbol, max_articles)
+            results[symbol] = articles
+
         # Clean up expired cache entries
         self.cache.clear_expired()
-        
+
         return results
 
 # Singleton instance

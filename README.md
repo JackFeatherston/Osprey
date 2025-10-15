@@ -1,48 +1,31 @@
 # Osprey Trading Assistant 🦅
 
-A complete **human-in-the-loop AI trading system** that analyzes market data, proposes trades, and executes them only with your approval. Built with Next.js, FastAPI, Supabase, and Redis for real-time trading decisions.
+A complete **human-in-the-loop AI trading system** that analyzes market data, proposes trades, and executes them only with your approval. Built with Next.js, FastAPI, Supabase, and Websockets for real-time trading decisions.
 
 ## 🌟 Features
 
-### ✅ **Complete Trading Workflow**
+###  **Complete Trading Workflow**
 - **AI Market Analysis**: Real-time analysis using moving averages and RSI strategies  
 - **Trade Proposals**: AI generates trade recommendations with detailed reasoning
 - **Human Approval**: All trades require explicit user approval before execution
 - **Live Execution**: Integrates with Alpaca API for paper and live trading
 - **Full Audit Trail**: Complete history of all proposals, decisions, and executions
 
-### ✅ **Real-time Dashboard**  
+###  **Real-time Dashboard**  
 - **Live Updates**: WebSocket-powered real-time proposal notifications
 - **Portfolio Tracking**: Real-time portfolio value and trading statistics
 - **AI Engine Control**: Start/stop AI analysis with one click
 - **System Health**: Comprehensive system status monitoring
 
-### ✅ **Secure & Scalable**
+###  **Secure & Scalable**
 - **User Authentication**: Supabase Auth with email/password and OAuth
 - **Database Security**: Row-level security ensuring data isolation
 - **Paper Trading**: Safe testing environment with Alpaca paper trading
 - **Docker Ready**: Complete containerization for easy deployment
 
-## 🏗️ Architecture
+##  Architecture
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Next.js UI   │◄──►│   FastAPI API   │◄──►│   Supabase DB   │
-│   (Frontend)    │    │   (Backend)     │    │   (Database)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         ▲                       ▲                       
-         │              ┌─────────────────┐              
-         └──────────────►│   Redis Pub/Sub │              
-                        │  (Real-time)    │              
-                        └─────────────────┘              
-                                 ▲                       
-                        ┌─────────────────┐              
-                        │   Alpaca API    │              
-                        │  (Trading)      │              
-                        └─────────────────┘              
-```
-
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 - Node.js 18+
@@ -88,23 +71,6 @@ docker-compose up --build
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
-## 📖 Usage Guide
-
-### Getting Started
-1. **Sign Up**: Create an account at http://localhost:3000
-2. **Dashboard**: View your trading dashboard with real-time data
-3. **Start AI**: Click "Start" on the AI Trading Engine card
-4. **Review Proposals**: AI will generate trade proposals based on market analysis
-5. **Make Decisions**: Approve or reject proposals with optional notes
-6. **Monitor Trades**: View execution status and trading history
-
-### Key Pages
-- **Dashboard** (`/dashboard`): Overview with stats and recent activity
-- **Proposals** (`/proposals`): Detailed view of all trade proposals  
-- **History** (`/history`): Complete trading history and decisions
-
-## 🔧 Development
-
 ### Project Structure
 ```
 osprey/
@@ -115,7 +81,8 @@ osprey/
 │   └── lib/              # Utilities and API client
 ├── backend/               # Backend (FastAPI)
 │   ├── main.py           # FastAPI application
-│   ├── ai_engine.py      # Trading AI logic
+│   ├── market_analyzer.py # Market analysis and trading logic
+│   ├── sentiment_trading_strategy.py # Sentiment-enhanced strategy
 │   └── supabase_client.py # Database operations
 ├── supabase/             # Database schema
 └── docker-compose.yml    # Development environment
@@ -125,7 +92,7 @@ osprey/
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui
 - **Backend**: FastAPI, Python 3.11, asyncio
 - **Database**: Supabase (PostgreSQL) with Row Level Security
-- **Real-time**: Redis Pub/Sub + WebSockets
+- **Real-time**: WebSockets
 - **Trading**: Alpaca API with paper trading support
 - **Deployment**: Docker containers
 
@@ -170,25 +137,6 @@ curl http://localhost:8000/health
 # (Use dashboard AI controls)
 ```
 
-## 🚀 Production Deployment
-
-### Frontend (Vercel)
-```bash
-# Build and deploy to Vercel
-vercel deploy --prod
-```
-
-### Backend (AWS EC2)
-```bash
-# Prepare for 1GB RAM limit
-# Use provided Dockerfile for optimized build
-docker build -t osprey-backend ./backend
-```
-
-### Database (Supabase)
-- Production database automatically scales
-- Backup and monitoring included
-- Apply schema via Supabase dashboard
 
 ## 📊 Database Schema
 
@@ -197,7 +145,6 @@ The system uses 5 main tables:
 - **`trade_proposals`**: AI-generated trade recommendations
 - **`trade_decisions`**: User approve/reject decisions  
 - **`trade_executions`**: Actual trade execution records
-- **`user_settings`**: User trading preferences
 - **`market_data`**: Cached market data
 
 All tables include Row Level Security for multi-user isolation.

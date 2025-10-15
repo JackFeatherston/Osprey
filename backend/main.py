@@ -8,7 +8,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from ai_engine import initialize_ai_engine, get_ai_engine
+from market_analyzer import initialize_ai_engine, get_ai_engine
 from supabase_client import get_supabase_client, SupabaseClient
 from auth_middleware import get_current_user, require_auth, get_user_id
 import uuid
@@ -18,39 +18,31 @@ import threading
 # Load environment variables
 load_dotenv()
 
-# Lifespan manager for AI engine
+# Lifespan manager for market analyzer
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     alpaca_api_key = os.getenv("ALPACA_API_KEY")
     alpaca_secret_key = os.getenv("ALPACA_SECRET_KEY")
-    
+
     if alpaca_api_key and alpaca_secret_key:
-        print("Initializing AI Engine...")
-        ai_engine = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, db, manager)
-        print("AI Engine initialized, starting background task...")
-        
-        # Start AI engine immediately in background
-        ai_task = asyncio.create_task(ai_engine.start())
-        app.state.ai_engine = ai_engine
-        app.state.ai_task = ai_task
-        print("AI Engine background task started")
-    else:
-        print("Warning: Alpaca credentials not found. AI Engine disabled.")
-    
+        market_analyzer = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, db, manager)
+        analyzer_task = asyncio.create_task(market_analyzer.start())
+        app.state.market_analyzer = market_analyzer
+        app.state.analyzer_task = analyzer_task
+
     yield
-    
+
     # Shutdown
-    if hasattr(app.state, 'ai_task'):
-        ai_engine = get_ai_engine()
-        if ai_engine:
-            ai_engine.stop()
-        app.state.ai_task.cancel()
+    if hasattr(app.state, 'analyzer_task'):
+        market_analyzer = get_ai_engine()
+        if market_analyzer:
+            market_analyzer.stop()
+        app.state.analyzer_task.cancel()
         try:
-            await app.state.ai_task
+            await app.state.analyzer_task
         except asyncio.CancelledError:
             pass
-        print("AI Engine stopped")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -97,24 +89,11 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
     
     async def send_message(self, websocket: WebSocket, message: dict):
-        try:
-            await websocket.send_text(json.dumps(message))
-        except Exception as e:
-            print(f"Error sending message to WebSocket: {e}")
-            self.disconnect(websocket)
+        await websocket.send_text(json.dumps(message))
     
     async def broadcast(self, message: dict):
-        disconnected_connections = []
         for connection in self.active_connections.copy():
-            try:
-                await connection.send_text(json.dumps(message))
-            except Exception as e:
-                print(f"Error broadcasting to WebSocket: {e}")
-                disconnected_connections.append(connection)
-        
-        # Remove disconnected connections
-        for connection in disconnected_connections:
-            self.disconnect(connection)
+            await connection.send_text(json.dumps(message))
 
 manager = ConnectionManager()
 
@@ -170,10 +149,10 @@ async def submit_decision(decision: TradeDecision):
     created_decision = await db.create_trade_decision(decision_data)
     
     execution_success = False
-    
+
     if decision.decision == "APPROVED":
-        ai_engine = get_ai_engine()
-        if ai_engine:
+        market_analyzer = get_ai_engine()
+        if market_analyzer:
             execution_data = {
                 "proposal_id": decision.proposal_id,
                 "user_id": proposal["user_id"],
@@ -182,9 +161,9 @@ async def submit_decision(decision: TradeDecision):
                 "quantity": proposal["quantity"],
                 "execution_status": "PENDING"
             }
-            
+
             execution_record = await db.create_trade_execution(execution_data)
-            execution_result = await ai_engine.execute_trade(proposal)
+            execution_result = await market_analyzer.execute_trade(proposal)
             
             if execution_result:
                 await db.update_trade_execution(execution_record["id"], {
@@ -228,12 +207,13 @@ async def get_decisions(user_id: str = Depends(get_user_id)):
 
 @app.get("/ai-status")
 async def get_ai_status():
-    ai_engine = get_ai_engine()
-    if ai_engine:
+    """Get market analyzer status (kept as /ai-status for frontend compatibility)"""
+    market_analyzer = get_ai_engine()
+    if market_analyzer:
         return {
-            "status": "running" if ai_engine.is_running else "stopped",
-            "watchlist": ai_engine.watchlist,
-            "strategies": [strategy.name for strategy in ai_engine.strategies]
+            "status": "running" if market_analyzer.is_running else "stopped",
+            "watchlist": market_analyzer.watchlist,
+            "strategies": [strategy.name for strategy in market_analyzer.strategies]
         }
     return {"status": "not initialized"}
 
@@ -266,8 +246,9 @@ async def get_recent_activity(limit: int = 10, user_id: str = Depends(get_user_i
 
 @app.get("/account")
 async def get_account_info():
-    ai_engine = get_ai_engine()
-    account = ai_engine.trading_client.get_account()
+    """Get Alpaca account information"""
+    market_analyzer = get_ai_engine()
+    account = market_analyzer.trading_client.get_account()
     return {
         "account_id": account.id,
         "buying_power": float(account.buying_power),
@@ -291,49 +272,46 @@ async def clear_user_proposals(user_id: str = Depends(get_user_id)):
 
 @app.post("/ai-engine/start")
 async def start_ai_engine_manual():
-    """Manually start the AI engine"""
-    ai_engine = get_ai_engine()
-    if ai_engine:
-        if not ai_engine.is_running:
-            print("Manually starting AI Engine...")
-            ai_task = asyncio.create_task(ai_engine.start())
-            app.state.ai_task = ai_task
-            return {"status": "AI engine started"}
+    """Manually start the market analyzer (kept as /ai-engine/start for frontend compatibility)"""
+    market_analyzer = get_ai_engine()
+    if market_analyzer:
+        if not market_analyzer.is_running:
+            analyzer_task = asyncio.create_task(market_analyzer.start())
+            app.state.analyzer_task = analyzer_task
+            return {"status": "Market analyzer started"}
         else:
-            return {"status": "AI engine already running"}
-    return {"status": "AI engine not initialized"}
+            return {"status": "Market analyzer already running"}
+    return {"status": "Market analyzer not initialized"}
 
-@app.post("/ai-engine/stop") 
+@app.post("/ai-engine/stop")
 async def stop_ai_engine_manual():
-    """Manually stop the AI engine"""
-    ai_engine = get_ai_engine()
-    if ai_engine:
-        ai_engine.stop()
-        if hasattr(app.state, 'ai_task'):
-            app.state.ai_task.cancel()
-        return {"status": "AI engine stopped"}
-    return {"status": "AI engine not initialized"}
+    """Manually stop the market analyzer (kept as /ai-engine/stop for frontend compatibility)"""
+    market_analyzer = get_ai_engine()
+    if market_analyzer:
+        market_analyzer.stop()
+        if hasattr(app.state, 'analyzer_task'):
+            app.state.analyzer_task.cancel()
+        return {"status": "Market analyzer stopped"}
+    return {"status": "Market analyzer not initialized"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time updates"""
     await manager.connect(websocket)
-    print(f"WebSocket client connected. Total connections: {len(manager.active_connections)}")
-    
     user_id = None
-    
+
     try:
         # Send initial connection confirmation
         await manager.send_message(websocket, {
             'type': 'connection',
             'data': {'status': 'connected', 'message': 'Real-time updates active'}
         })
-        
+
         # Keep connection alive and handle incoming messages
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
-            
+
             if message.get('type') == 'ping':
                 await manager.send_message(websocket, {
                     'type': 'pong',
@@ -348,44 +326,31 @@ async def websocket_endpoint(websocket: WebSocket):
                     'data': {'status': 'subscribed', 'channels': ['trade_proposals', 'trade_logs']}
                 })
             elif message.get('type') == 'auth' and message.get('token'):
-                # Handle authentication and add user to AI engine targets
-                try:
-                    # Verify token and get user
-                    from auth_middleware import verify_jwt_token
-                    user = await verify_jwt_token(message['token'])
-                    user_id = user.get('sub') if user else None
-                    
-                    # Add user to AI engine targets
-                    ai_engine = get_ai_engine()
-                    if ai_engine and user_id:
-                        ai_engine.add_target_user(user_id)
-                        print(f"Added user {user_id} to AI engine targets")
-                        
-                        await manager.send_message(websocket, {
-                            'type': 'auth_success',
-                            'data': {'user_id': user_id, 'message': 'Authenticated and subscribed to AI proposals'}
-                        })
-                except Exception as e:
-                    print(f"WebSocket auth error: {e}")
+                # Handle authentication and add user to market analyzer targets
+                from auth_middleware import verify_jwt_token
+                user = await verify_jwt_token(message['token'])
+                user_id = user.get('sub') if user else None
+
+                # Add user to market analyzer targets
+                market_analyzer = get_ai_engine()
+                if market_analyzer and user_id:
+                    market_analyzer.add_target_user(user_id)
+
                     await manager.send_message(websocket, {
-                        'type': 'auth_error',
-                        'data': {'error': 'Authentication failed'}
+                        'type': 'auth_success',
+                        'data': {'user_id': user_id, 'message': 'Authenticated and subscribed to trade proposals'}
                     })
-                
+
     except WebSocketDisconnect:
-        print("WebSocket client disconnected")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
+        pass
     finally:
-        # Remove user from AI engine targets when disconnecting
+        # Remove user from market analyzer targets when disconnecting
         if user_id:
-            ai_engine = get_ai_engine()
-            if ai_engine:
-                ai_engine.remove_target_user(user_id)
-                print(f"Removed user {user_id} from AI engine targets")
-        
+            market_analyzer = get_ai_engine()
+            if market_analyzer:
+                market_analyzer.remove_target_user(user_id)
+
         manager.disconnect(websocket)
-        print(f"WebSocket client removed. Total connections: {len(manager.active_connections)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

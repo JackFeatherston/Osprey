@@ -62,27 +62,23 @@ async def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
     """
     Verify JWT token and return user info
     """
-    try:
-        decoded_token = jwt.decode(
-            token, 
-            supabase_jwt_secret, 
-            algorithms=["HS256"],
-            options={"verify_signature": False}
-        )
-        
-        user_id = decoded_token.get("sub")
-        if not user_id:
-            return None
-            
-        return {
-            "sub": user_id,
-            "email": decoded_token.get("email"),
-            "user_metadata": decoded_token.get("user_metadata", {}),
-            "app_metadata": decoded_token.get("app_metadata", {})
-        }
-    except Exception as e:
-        logger.error(f"JWT verification failed: {e}")
+    decoded_token = jwt.decode(
+        token,
+        supabase_jwt_secret,
+        algorithms=["HS256"],
+        options={"verify_signature": False}
+    )
+
+    user_id = decoded_token.get("sub")
+    if not user_id:
         return None
+
+    return {
+        "sub": user_id,
+        "email": decoded_token.get("email"),
+        "user_metadata": decoded_token.get("user_metadata", {}),
+        "app_metadata": decoded_token.get("app_metadata", {})
+    }
 
 async def get_user_id(authorization: Optional[str] = Header(None)) -> str:
     """

@@ -36,28 +36,21 @@ class SentimentAnalyzer:
         """Lazy load the FinBERT model"""
         if self.model_loaded:
             return
-        
-        try:
-            logger.info(f"Loading FinBERT model: {self.model_name}")
-            from transformers import pipeline
-            
-            # Load model with memory optimizations
-            self.pipeline = pipeline(
-                "sentiment-analysis",
-                model=self.model_name,
-                device=-1,  # Use CPU (more memory efficient than GPU on small instance)
-                truncation=True,
-                max_length=512  # Limit input length
-            )
-            
-            self.model_loaded = True
-            logger.info("FinBERT model loaded successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to load FinBERT model: {e}")
-            logger.info("Falling back to simple sentiment analysis")
-            self.pipeline = None
-            self.model_loaded = True  # Prevent retry loops
+
+        logger.info(f"Loading FinBERT model: {self.model_name}")
+        from transformers import pipeline
+
+        # Load model with memory optimizations
+        self.pipeline = pipeline(
+            "sentiment-analysis",
+            model=self.model_name,
+            device=-1,  # Use CPU (more memory efficient than GPU on small instance)
+            truncation=True,
+            max_length=512  # Limit input length
+        )
+
+        self.model_loaded = True
+        logger.info("FinBERT model loaded successfully")
     
     def _normalize_sentiment_score(self, label: str, score: float) -> float:
         """Convert sentiment to -1 to +1 scale"""
@@ -77,67 +70,30 @@ class SentimentAnalyzer:
         """Analyze sentiment of a single text"""
         if not self.model_loaded:
             self._load_model()
-        
+
         if not self.pipeline:
-            # Fallback sentiment analysis
-            return self._fallback_sentiment(text)
-        
-        try:
-            # Clean and truncate text
-            clean_text = text.strip()[:500]  # Limit length for memory
-            
-            result = self.pipeline(clean_text)[0]
-            label = result['label'].lower()
-            score = result['score']
-            
-            # Map FinBERT labels to standard format
-            if label in ['positive', 'bullish']:
-                standard_label = "positive"
-            elif label in ['negative', 'bearish']:
-                standard_label = "negative"
-            else:
-                standard_label = "neutral"
-            
-            normalized_score = self._normalize_sentiment_score(standard_label, score)
-            
-            return SentimentResult(
-                text=clean_text,
-                label=standard_label,
-                score=score,
-                normalized_score=normalized_score
-            )
-            
-        except Exception as e:
-            logger.error(f"Error analyzing sentiment: {e}")
-            return self._fallback_sentiment(text)
-    
-    def _fallback_sentiment(self, text: str) -> SentimentResult:
-        """Simple keyword-based sentiment analysis fallback"""
-        text_lower = text.lower()
-        
-        positive_words = ['buy', 'bull', 'gain', 'rise', 'up', 'positive', 'growth', 'profit', 'beat', 'strong']
-        negative_words = ['sell', 'bear', 'loss', 'fall', 'down', 'negative', 'decline', 'miss', 'weak']
-        
-        positive_count = sum(1 for word in positive_words if word in text_lower)
-        negative_count = sum(1 for word in negative_words if word in text_lower)
-        
-        if positive_count > negative_count:
-            label = "positive"
-            score = min(0.6 + (positive_count - negative_count) * 0.1, 0.9)
-        elif negative_count > positive_count:
-            label = "negative" 
-            score = min(0.6 + (negative_count - positive_count) * 0.1, 0.9)
+            raise RuntimeError("FinBERT model failed to load")
+
+        # Clean and truncate text
+        clean_text = text.strip()[:500]
+
+        result = self.pipeline(clean_text)[0]
+        label = result['label'].lower()
+        score = result['score']
+
+        # Map FinBERT labels to standard format
+        if label in ['positive', 'bullish']:
+            standard_label = "positive"
+        elif label in ['negative', 'bearish']:
+            standard_label = "negative"
         else:
-            label = "neutral"
-            score = 0.5
-        
-        normalized_score = self._normalize_sentiment_score(label, score)
-        
-        logger.info(f"Fallback sentiment for '{text[:50]}...': {label} ({normalized_score:.2f})")
-        
+            standard_label = "neutral"
+
+        normalized_score = self._normalize_sentiment_score(standard_label, score)
+
         return SentimentResult(
-            text=text[:500],
-            label=label,
+            text=clean_text,
+            label=standard_label,
             score=score,
             normalized_score=normalized_score
         )
