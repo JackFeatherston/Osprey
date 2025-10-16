@@ -75,25 +75,29 @@ class TradeDecision(BaseModel):
 # Initialize Supabase client
 db = get_supabase_client()
 
-# WebSocket connection manager
+# Minimal WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Set[WebSocket] = set()
-        
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.add(websocket)
-        
+
     def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-    
-    async def send_message(self, websocket: WebSocket, message: dict):
-        await websocket.send_text(json.dumps(message))
-    
+        self.active_connections.discard(websocket)
+
     async def broadcast(self, message: dict):
-        for connection in self.active_connections.copy():
-            await connection.send_text(json.dumps(message))
+        """Broadcast message to all connected clients, auto-remove dead connections"""
+        dead_connections = set()
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_text(json.dumps(message))
+            except:
+                dead_connections.add(connection)
+
+        # Clean up dead connections
+        self.active_connections -= dead_connections
 
 manager = ConnectionManager()
 
@@ -296,60 +300,16 @@ async def stop_ai_engine_manual():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time updates"""
+    """Minimal WebSocket endpoint - just connect and listen"""
     await manager.connect(websocket)
-    user_id = None
 
     try:
-        # Send initial connection confirmation
-        await manager.send_message(websocket, {
-            'type': 'connection',
-            'data': {'status': 'connected', 'message': 'Real-time updates active'}
-        })
-
-        # Keep connection alive and handle incoming messages
+        # Keep connection alive - just receive and ignore messages
         while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-
-            if message.get('type') == 'ping':
-                await manager.send_message(websocket, {
-                    'type': 'pong',
-                    'data': {
-                        'timestamp': datetime.now().isoformat(),
-                        'original_timestamp': message.get('timestamp')
-                    }
-                })
-            elif message.get('type') == 'subscribe':
-                await manager.send_message(websocket, {
-                    'type': 'subscription',
-                    'data': {'status': 'subscribed', 'channels': ['trade_proposals', 'trade_logs']}
-                })
-            elif message.get('type') == 'auth' and message.get('token'):
-                # Handle authentication and add user to market analyzer targets
-                from auth_middleware import verify_jwt_token
-                user = await verify_jwt_token(message['token'])
-                user_id = user.get('sub') if user else None
-
-                # Add user to market analyzer targets
-                market_analyzer = get_ai_engine()
-                if market_analyzer and user_id:
-                    market_analyzer.add_target_user(user_id)
-
-                    await manager.send_message(websocket, {
-                        'type': 'auth_success',
-                        'data': {'user_id': user_id, 'message': 'Authenticated and subscribed to trade proposals'}
-                    })
-
+            await websocket.receive_text()
     except WebSocketDisconnect:
         pass
     finally:
-        # Remove user from market analyzer targets when disconnecting
-        if user_id:
-            market_analyzer = get_ai_engine()
-            if market_analyzer:
-                market_analyzer.remove_target_user(user_id)
-
         manager.disconnect(websocket)
 
 if __name__ == "__main__":

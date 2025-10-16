@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, AccountInfo, RecentActivity, DashboardStats, AIStatus } from '@/lib/api';
-import { useWebSocketContext } from '@/contexts/WebSocketContext';
+import { useWebSocket } from './useWebSocket';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Core hook for trade proposals - matches CLAUDE.md workflow
 export function useTradeProposals() {
   const [proposals, setProposals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const webSocket = useWebSocketContext();
+  const { user } = useAuth();
 
   // Fetch initial proposals from API
   const fetchProposals = useCallback(async () => {
@@ -24,32 +24,43 @@ export function useTradeProposals() {
     }
   }, []);
 
-  // Handle incoming WebSocket messages from backend  
+  // Initial fetch
   useEffect(() => {
-    webSocket.setOnMessage((message) => {
+    if (user) {
+      fetchProposals();
+    }
+  }, [fetchProposals, user]);
+
+  // WebSocket real-time updates - ONLY when authenticated
+  const wsUrl = typeof window !== 'undefined'
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws') + '/ws'
+    : '';
+
+  const isConnected = useWebSocket(
+    wsUrl,
+    useCallback((message) => {
       if (message.type === 'trade_proposals') {
         setProposals(prev => [message.data, ...prev]);
       } else if (message.type === 'proposal_updated') {
-        setProposals(prev => 
+        setProposals(prev =>
           prev.map(p => p.id === message.data.id ? message.data : p)
         );
       } else if (message.type === 'proposals_cleared') {
-        // Clear pending proposals from local state when cleared on server
         setProposals(prev => prev.filter(p => p.status !== 'PENDING'));
         console.log(`${message.data.cleared_count} proposals cleared`);
       } else if (message.type === 'trade_logs') {
-        // Handle trade execution updates - refresh proposals to show status changes
         fetchProposals();
       }
-    });
-  }, [webSocket, fetchProposals]);
+    }, [fetchProposals]),
+    typeof window !== 'undefined' && !!user // Only connect when in browser AND user is authenticated
+  );
 
   // Submit approve/reject decision - core workflow function
   const submitDecision = useCallback(async (proposalId: string, decision: 'APPROVED' | 'REJECTED', notes?: string) => {
     try {
       await api.submitDecision({ proposal_id: proposalId, decision, notes });
       // Update local state optimistically
-      setProposals(prev => 
+      setProposals(prev =>
         prev.map(p => p.id === proposalId ? { ...p, status: decision } : p)
       );
     } catch (err) {
@@ -57,10 +68,6 @@ export function useTradeProposals() {
       throw err;
     }
   }, []);
-
-  useEffect(() => {
-    fetchProposals();
-  }, [fetchProposals]);
 
   // Clear all pending proposals manually
   const clearProposals = useCallback(async () => {
@@ -80,8 +87,7 @@ export function useTradeProposals() {
     submitDecision,
     clearProposals,
     refetch: fetchProposals,
-    isConnected: webSocket.isConnected,
-    connectionState: webSocket.connectionState
+    isConnected,
   };
 }
 
@@ -184,6 +190,6 @@ export function useDashboard() {
     stats,
     ai,
     isConnected: proposals.isConnected,
-    connectionState: proposals.connectionState
+    connectionState: (proposals.isConnected ? 'connected' : 'disconnected') as 'connected' | 'disconnected' | 'connecting' | 'error',
   };
 }
