@@ -7,41 +7,38 @@ from typing import Optional, Dict, Any
 import jwt
 import os
 import logging
-from supabase import create_client
 
 logger = logging.getLogger(__name__)
 
-# Supabase client for auth verification
+# Supabase configuration for auth verification
 supabase_url = os.getenv("SUPABASE_URL")
 supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET", "your-jwt-secret")
-
-auth_client = create_client(supabase_url, supabase_service_key) if supabase_url and supabase_service_key else None
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[Dict[str, Any]]:
     """
     Extract and verify user from Authorization header
     Returns user info if token is valid, None otherwise
     """
-    if not authorization or not auth_client:
+    if not authorization or not supabase_url or not supabase_service_key:
         return None
-    
+
     if not authorization.startswith("Bearer "):
         return None
-        
+
     token = authorization[7:]
-    
+
     decoded_token = jwt.decode(
-        token, 
-        supabase_jwt_secret, 
+        token,
+        supabase_jwt_secret,
         algorithms=["HS256"],
         options={"verify_signature": False}
     )
-    
+
     user_id = decoded_token.get("sub")
     if not user_id:
         return None
-        
+
     return {
         "id": user_id,
         "email": decoded_token.get("email"),

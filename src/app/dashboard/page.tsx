@@ -6,7 +6,7 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDashboard } from '@/hooks/useTradingData'
-import { AlertCircle, CheckCircle, Clock, DollarSign, TrendingUp, Activity, ArrowRight, History } from 'lucide-react'
+import { AlertCircle, DollarSign, TrendingUp, Activity, ArrowRight, History } from 'lucide-react'
 import TradeProposalCard from '@/components/TradeProposalCard'
 import SystemStatus from '@/components/SystemStatus'
 import Link from 'next/link'
@@ -37,19 +37,6 @@ export default function Dashboard() {
 
   if (!user) {
     return null
-  }
-
-  // Show loading state only if ALL data is loading (not individual components)
-  // This prevents infinite loading when some API calls fail
-  const isInitialLoad = dashboard.stats.loading && dashboard.proposals.loading && dashboard.account.loading && 
-    !dashboard.stats.error && !dashboard.proposals.error && !dashboard.account.error;
-  
-  if (isInitialLoad) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading dashboard data...</div>
-      </div>
-    )
   }
 
   return (
@@ -89,16 +76,16 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* AI Status Card */}
+        {/* Market Analysis Engine Status Card */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                AI Trading Engine
+                Market Analysis Engine
               </CardTitle>
               <CardDescription>
-                Status and control of the AI trading system
+                Status and control of the trading system
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -257,22 +244,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Error Display */}
-        {(dashboard.stats.error || dashboard.proposals.error || dashboard.account.error || dashboard.ai.error) && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2 text-red-800">
-              <AlertCircle className="h-4 w-4" />
-              <span className="font-medium">System Errors Detected</span>
-            </div>
-            <div className="mt-2 text-sm text-red-700">
-              {dashboard.stats.error && <div>Stats: {dashboard.stats.error}</div>}
-              {dashboard.proposals.error && <div>Proposals: {dashboard.proposals.error}</div>}
-              {dashboard.account.error && <div>Account: {dashboard.account.error}</div>}
-              {dashboard.ai.error && <div>AI Engine: {dashboard.ai.error}</div>}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
