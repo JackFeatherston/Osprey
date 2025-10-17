@@ -8,6 +8,7 @@ import TradeProposalDeck from '@/components/TradeProposalDeck'
 import OrderBook from '@/components/OrderBook'
 import MarketMonitor from '@/components/MarketMonitor'
 import SystemStatus from '@/components/SystemStatus'
+import BuyingPower from '@/components/BuyingPower'
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
@@ -68,9 +69,9 @@ export default function Dashboard() {
               <OrderBook symbol="AAPL" />
             </div>
 
-            {/* Middle - Empty for now (could add more components later) */}
+            {/* Middle - Buying Power */}
             <div className="col-span-1">
-              {/* Reserved for future use */}
+              <BuyingPower />
             </div>
 
             {/* Right - System Status and Market Monitor */}

@@ -152,7 +152,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
         <div className="grid grid-row-3 gap-3 text-sm">
           {/* API Status */}
           <div className="flex items-center justify-between py-2">
-            <span className="text-neutral-300">API</span>
+            <span className="text-neutral-300">Backend</span>
             <Badge variant="outline" className={`${getStatusColor(health.api)} border-0`}>
               {getStatusIcon('api', health.api)}
               <span className="ml-1 capitalize">{health.api}</span>
@@ -161,7 +161,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
 
           {/* Database Status */}
           <div className="flex items-center justify-between py-2">
-            <span className="text-neutral-300">Database</span>
+            <span className="text-neutral-300">Supabase</span>
             <Badge variant="outline" className={`${getStatusColor(health.database)} border-0`}>
               {getStatusIcon('database', health.database)}
               <span className="ml-1 capitalize">{health.database}</span>
@@ -170,7 +170,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
 
           {/* WebSocket Status */}
           <div className="flex items-center justify-between py-2">
-            <span className="text-neutral-300">Real-time</span>
+            <span className="text-neutral-300">Websocket</span>
             <Badge variant="outline" className={`${getStatusColor(health.websocket)} border-0`}>
               {getStatusIcon('websocket', health.websocket)}
               <span className="ml-1 capitalize">{health.websocket}</span>

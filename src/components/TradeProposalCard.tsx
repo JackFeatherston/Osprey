@@ -174,7 +174,7 @@ export default function TradeProposalCard({
           {canTakeAction && (
             <div className="flex gap-3 pt-2">
               <Button 
-                onClick={handleApprove}
+                onClick={() => handleApprove}
                 disabled={isProcessing}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white"
               >
@@ -183,7 +183,7 @@ export default function TradeProposalCard({
               </Button>
               
               <Button 
-                onClick={handleReject}
+                onClick={() => handleReject}
                 disabled={isProcessing}
                 variant="outline"
                 className="flex-1 border-red-300 text-red-700 hover:bg-red-50"

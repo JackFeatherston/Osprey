@@ -100,7 +100,7 @@ export default function TradeProposalDeck({ proposals, onApprove, onReject }: Tr
                 </div>
 
                 {/* Reasoning - contained with scroll */}
-                <div className="flex-1 min-h-0 mb-3 overflow-y-auto scrollbar-thin scrollbar-thumb-neutral-600 scrollbar-track-neutral-800">
+                <div className="flex-1 min-h-0 mb-3 overflow-y-auto">
                   <div className="text-sm text-neutral-400 pr-2">
                     [Reasoning. Ex: {proposal.reason}]
                   </div>
@@ -200,13 +200,13 @@ export default function TradeProposalDeck({ proposals, onApprove, onReject }: Tr
 
             <div className="flex gap-4">
               <button
-                onClick={handleApprove}
+                onClick={() => handleApprove}
                 className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-semibold transition-colors"
               >
                 Approve Trade
               </button>
               <button
-                onClick={handleReject}
+                onClick={() => handleReject}
                 className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold transition-colors"
               >
                 Reject
