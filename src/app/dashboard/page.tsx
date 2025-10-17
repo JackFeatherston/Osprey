@@ -51,9 +51,9 @@ export default function Dashboard() {
         </div>
 
         {/* Grid Layout */}
-        <div className="grid grid-rows-[minmax(300px,_1fr)_minmax(500px,_1fr)] gap-6 h-[calc(100vh-8rem)]">
+        <div className="grid grid-rows-[420px_minmax(500px,_1fr)] gap-6 h-[calc(100vh-8rem)]">
           {/* Top Section - Trade Proposals Deck */}
-          <div className="w-full">
+          <div className="w-full overflow-visible">
             <TradeProposalDeck
               proposals={dashboard.proposals.proposals}
               onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
