@@ -22,7 +22,6 @@ export default function TradeProposalDeck({ proposals, onApprove, onReject }: Tr
       <div className="h-full flex items-center justify-center bg-neutral-900/50 rounded-lg border border-neutral-700">
         <div className="text-center text-neutral-400">
           <p className="text-xl">No active proposals</p>
-          <p className="text-sm mt-2">The AI will display new trade opportunities here</p>
         </div>
       </div>
     )
