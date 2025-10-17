@@ -8,7 +8,7 @@ export function useTradeProposals() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const { user } = useAuth();
+  const { user } = useAuth(); 
   const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch initial proposals from API
