@@ -9,6 +9,7 @@ import OrderBook from '@/components/OrderBook'
 import MarketMonitor from '@/components/MarketMonitor'
 import SystemStatus from '@/components/SystemStatus'
 import BuyingPower from '@/components/BuyingPower'
+import MarketChartsGrid from '@/components/MarketChartsGrid'
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
@@ -53,13 +54,21 @@ export default function Dashboard() {
 
         {/* Grid Layout */}
         <div className="grid grid-rows-[420px_minmax(500px,_1fr)] gap-6 h-[calc(100vh-8rem)]">
-          {/* Top Section - Trade Proposals Deck */}
-          <div className="w-full overflow-visible">
-            <TradeProposalDeck
-              proposals={dashboard.proposals.proposals}
-              onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
-              onReject={(id, notes) => dashboard.proposals.submitDecision(id, 'REJECTED', notes)}
-            />
+          {/* Top Section - Trade Proposals Deck + Market Charts */}
+          <div className="grid grid-cols-[1fr_550px] gap-6 overflow-visible">
+            {/* Left - Trade Proposals Deck */}
+            <div className="overflow-visible">
+              <TradeProposalDeck
+                proposals={dashboard.proposals.proposals}
+                onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
+                onReject={(id, notes) => dashboard.proposals.submitDecision(id, 'REJECTED', notes)}
+              />
+            </div>
+
+            {/* Right - Market Charts Grid */}
+            <div className="overflow-hidden">
+              <MarketChartsGrid watchlist={dashboard.ai.status?.watchlist} />
+            </div>
           </div>
 
           {/* Bottom Section - Three Columns */}

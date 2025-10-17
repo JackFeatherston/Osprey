@@ -13,8 +13,10 @@ from market_analyzer import initialize_ai_engine, get_ai_engine
 from supabase_client import get_supabase_client, SupabaseClient
 from auth_middleware import get_current_user, require_auth, get_user_id
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
+from alpaca.data import TimeFrame
+from alpaca.data.requests import StockBarsRequest
 
 # Load environment variables
 load_dotenv()
@@ -328,6 +330,56 @@ async def get_orderbook(symbol: str = "AAPL"):
     except Exception as e:
         logger.error(f"Error fetching order book: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch order book: {str(e)}")
+
+@app.get("/bars/{symbol}")
+async def get_bars(symbol: str, days: int = 30):
+    """Get historical candlestick bar data for a symbol"""
+    try:
+        market_analyzer = get_ai_engine()
+        if not market_analyzer:
+            raise HTTPException(status_code=503, detail="Market analyzer not available")
+
+        # Get historical data - use delayed data (1 day ago) to avoid SIP restrictions
+        end_date = datetime.now() - timedelta(days=1)
+        start_date = end_date - timedelta(days=days)
+
+        request_params = StockBarsRequest(
+            symbol_or_symbols=[symbol],
+            timeframe=TimeFrame.Day,
+            start=start_date,
+            end=end_date
+        )
+
+        bars = market_analyzer.data_client.get_stock_bars(request_params)
+
+        if bars.df.empty:
+            return {"symbol": symbol, "bars": []}
+
+        df = bars.df.reset_index()
+        df = df[df['symbol'] == symbol].copy()
+
+        # Convert to list of dicts for JSON response
+        bar_data = []
+        for _, row in df.iterrows():
+            bar_data.append({
+                "time": row['timestamp'].isoformat(),
+                "open": float(row['open']),
+                "high": float(row['high']),
+                "low": float(row['low']),
+                "close": float(row['close']),
+                "volume": int(row['volume'])
+            })
+
+        return {
+            "symbol": symbol,
+            "bars": bar_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching bars for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch bars: {str(e)}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
