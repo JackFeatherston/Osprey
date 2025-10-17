@@ -1,31 +1,31 @@
-# Osprey Trading Assistant 🦅
+# Osprey Trading Assistant
 
-A complete **human-in-the-loop algorithmic trading system** that analyzes market data using technical indicators and news sentiment, proposes trades, and executes them only with your approval. Built with Next.js, FastAPI, Supabase, and Websockets for real-time trading decisions.
+A complete human-in-the-loop algorithmic trading system that analyzes market data using technical indicators and news sentiment, proposes trades, and executes them only with your approval. Built with Next.js, FastAPI, Supabase, and WebSockets for real-time trading decisions.
 
-## 🌟 Features
+## Features
 
-###  **Complete Trading Workflow**
+### Complete Trading Workflow
 - **Technical Market Analysis**: 100-day historical price/volume analysis with trend detection and momentum signals
-- **News Sentiment Analysis**: Real-time financial news fetching via NewsAPI with FinBERT sentiment scoring
+- **News Sentiment Analysis**: Real-time financial news fetching via NewsAPI with VADER sentiment scoring
 - **Sentiment-Enhanced Strategy**: Combines news sentiment (60%) with technical indicators (40%) for trade signals
 - **Trade Proposals**: System generates trade recommendations with detailed reasoning showing sentiment + technical factors
 - **Human Approval**: All trades require explicit user approval before execution
 - **Live Execution**: Integrates with Alpaca API for paper and live trading
 - **Full Audit Trail**: Complete history of all proposals, decisions, and executions
 
-###  **Real-time Dashboard**
+### Real-time Dashboard
 - **Live Updates**: WebSocket-powered real-time proposal notifications
 - **Portfolio Tracking**: Real-time portfolio value and trading statistics
 - **Market Analyzer Control**: Start/stop market analysis with one click
 - **System Health**: Comprehensive system status monitoring
 
-###  **Secure & Scalable**
+### Secure & Scalable
 - **User Authentication**: Supabase Auth with email/password and OAuth
 - **Database Security**: Row-level security ensuring data isolation
 - **Paper Trading**: Safe testing environment with Alpaca paper trading
 - **Docker Ready**: Complete containerization for easy deployment
 
-## 🏗️ Architecture & File Interactions
+## Architecture & File Interactions
 
 ### System Flow
 
@@ -48,10 +48,11 @@ A complete **human-in-the-loop algorithmic trading system** that analyzes market
                       │    • Caches articles (30min TTL)
                       │    • Rate limits API requests
                       │
-                      └──► finbert_news_analyzer.py
-                           • Loads ProsusAI/finbert model
+                      └──► vader_sentiment_analyzer.py
+                           • Uses VADER sentiment analysis (rule-based)
                            • Analyzes sentiment of news articles
                            • Returns scores: -1 (negative) to +1 (positive)
+                           • Optimized for financial keywords and context
 ```
 
 ### Backend File Responsibilities
@@ -76,7 +77,7 @@ A complete **human-in-the-loop algorithmic trading system** that analyzes market
   - Volume analysis and spike detection
 - **Sentiment Analysis** (60% weight):
   - Fetches news articles via `news_fetcher.py`
-  - Gets sentiment scores via `finbert_news_analyzer.py`
+  - Gets sentiment scores via `vader_sentiment_analyzer.py`
   - Requires minimum 2 articles for sentiment signals
 - **Signal Generation**: Combines both analyses to produce BUY/SELL signals
 - **Reasoning**: Generates human-readable explanations for decisions
@@ -87,12 +88,14 @@ A complete **human-in-the-loop algorithmic trading system** that analyzes market
 - **Rate Limiting**: 1-second delay between requests
 - **Article Parsing**: Extracts title, description, URL, and metadata
 
-#### **`finbert_news_analyzer.py`** - Sentiment Scorer
-- **Model Loading**: Lazy loads ProsusAI/finbert (memory optimized)
+#### **`vader_sentiment_analyzer.py`** - Sentiment Scorer
+- **Rule-based Analysis**: Uses VADER (Valence Aware Dictionary and sEntiment Reasoner)
+- **Financial Context**: Enhanced with financial keyword boosters and context adjustments
 - **Text Analysis**: Processes article titles + descriptions
 - **Sentiment Scoring**: Returns positive/negative/neutral labels with confidence
 - **Aggregation**: Calculates weighted average sentiment across multiple articles
 - **Caching**: LRU cache for repeated text analysis
+- **Memory Efficient**: Lightweight alternative to transformer models, ideal for 1GB RAM constraint
 
 #### **`supabase_client.py`** - Database Layer
 - CRUD operations for proposals, decisions, and executions
@@ -115,12 +118,12 @@ A complete **human-in-the-loop algorithmic trading system** that analyzes market
                 ↓
 5. news_fetcher.py returns 5 recent articles from NewsAPI
                 ↓
-6. Strategy passes articles to finbert_news_analyzer.py
+6. Strategy passes articles to vader_sentiment_analyzer.py
                 ↓
-7. FinBERT analyzes each article:
-   - Article 1: "AAPL beats earnings" → Positive (+0.92)
-   - Article 2: "iPhone sales strong" → Positive (+0.88)
-   - Article 3: "Market concerns" → Negative (-0.65)
+7. VADER analyzes each article with financial context:
+   - Article 1: "AAPL beats earnings" → Positive (+0.85)
+   - Article 2: "iPhone sales surge" → Positive (+0.78)
+   - Article 3: "Market concerns" → Negative (-0.52)
    - Weighted average: +0.58
                 ↓
 8. Strategy combines scores:
@@ -133,7 +136,7 @@ A complete **human-in-the-loop algorithmic trading system** that analyzes market
 10. Frontend displays proposal with full reasoning to user
 ```
 
-##  Quick Start
+## Quick Start
 
 ### Prerequisites
 - Node.js 18+
@@ -192,7 +195,7 @@ osprey/
 │   ├── market_analyzer.py # Coordinates analysis & fetches 100-day market data
 │   ├── sentiment_trading_strategy.py # Combines sentiment + technical analysis
 │   ├── news_fetcher.py   # Fetches financial news from NewsAPI
-│   ├── finbert_news_analyzer.py # FinBERT sentiment analysis model
+│   ├── vader_sentiment_analyzer.py # VADER sentiment analysis with financial context
 │   └── supabase_client.py # Database operations
 ├── supabase/             # Database schema
 └── docker-compose.yml    # Development environment
@@ -205,7 +208,7 @@ osprey/
 - **Real-time**: WebSockets
 - **Trading**: Alpaca API with paper trading support
 - **News Data**: NewsAPI for financial news articles
-- **Sentiment Analysis**: FinBERT (ProsusAI/finbert) via Transformers
+- **Sentiment Analysis**: VADER (vaderSentiment) with financial keyword enhancements
 - **Market Data**: 100-day historical price/volume from Alpaca
 - **Deployment**: Docker containers
 
@@ -226,7 +229,7 @@ pytest backend/            # Backend tests
 # (Apply schema changes via Supabase dashboard)
 ```
 
-## 🧪 Testing
+## Testing
 
 See [TESTING.md](./TESTING.md) for comprehensive testing instructions covering:
 - End-to-end workflow testing
@@ -251,7 +254,7 @@ curl http://localhost:8000/health
 ```
 
 
-## 📊 Database Schema
+## Database Schema
 
 The system uses 5 main tables:
 
@@ -262,7 +265,7 @@ The system uses 5 main tables:
 
 All tables include Row Level Security for multi-user isolation.
 
-## 🔒 Security Features
+## Security Features
 
 - **Authentication**: JWT-based auth via Supabase
 - **Authorization**: Row-level security policies

@@ -154,9 +154,11 @@ async def submit_decision(decision: TradeDecision):
         "notes": getattr(decision, 'notes', None)
     }
 
+    # Always log the decision first, regardless of execution outcome
     created_decision = await db.create_trade_decision(decision_data)
 
     execution_success = False
+    execution_error = None
 
     if decision.decision == "APPROVED":
         market_analyzer = get_ai_engine()
@@ -171,19 +173,41 @@ async def submit_decision(decision: TradeDecision):
             }
 
             execution_record = await db.create_trade_execution(execution_data)
-            execution_result = await market_analyzer.execute_trade(proposal)
 
-            if execution_result:
+            # Wrap trade execution in try-catch to handle failures gracefully
+            try:
+                execution_result = await market_analyzer.execute_trade(proposal)
+
+                if execution_result:
+                    await db.update_trade_execution(execution_record["id"], {
+                        "execution_status": "FILLED",
+                        "executed_price": proposal["price"],
+                        "executed_at": datetime.now().isoformat()
+                    })
+                    execution_success = True
+                else:
+                    await db.update_trade_execution(execution_record["id"], {
+                        "execution_status": "REJECTED",
+                        "error_message": "Trade execution returned false"
+                    })
+                    execution_error = "Trade execution failed"
+            except Exception as e:
+                # Log the error and update execution record
+                error_msg = str(e)
+                logger.error(f"Trade execution failed: {error_msg}")
                 await db.update_trade_execution(execution_record["id"], {
-                    "execution_status": "FILLED",
-                    "executed_price": proposal["price"],
-                    "executed_at": datetime.now().isoformat()
+                    "execution_status": "REJECTED",
+                    "error_message": error_msg
                 })
-                execution_success = True
+                execution_error = error_msg
+        else:
+            execution_error = "Market analyzer not available"
 
     result = {"status": "decision recorded", "decision": decision.decision}
     if decision.decision == "APPROVED":
         result["executed"] = execution_success
+        if execution_error:
+            result["error"] = execution_error
 
     return result
 

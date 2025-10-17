@@ -75,11 +75,23 @@ export function useTradeProposals() {
   // Submit approve/reject decision - core workflow function
   const submitDecision = useCallback(async (proposalId: string, decision: 'APPROVED' | 'REJECTED', notes?: string) => {
     try {
-      await api.submitDecision({ proposal_id: proposalId, decision, notes });
-      // Update local state optimistically
+      const result = await api.submitDecision({ proposal_id: proposalId, decision, notes });
+
+      // Always update local state since decision was logged
       setProposals(prev =>
         prev.map(p => p.id === proposalId ? { ...p, status: decision } : p)
       );
+
+      // If there was an execution error, notify the user but don't throw
+      if (result.error) {
+        console.error('Trade execution error:', result.error);
+        setError(`Decision recorded, but execution failed: ${result.error}`);
+      } else if (decision === 'APPROVED' && !result.executed) {
+        setError('Decision recorded, but trade execution did not complete');
+      } else {
+        // Clear any previous errors on success
+        setError(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit decision');
       throw err;
@@ -98,12 +110,18 @@ export function useTradeProposals() {
     }
   }, [fetchProposals]);
 
+  // Clear error
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   return {
     proposals,
     loading,
     error,
     submitDecision,
     clearProposals,
+    clearError,
     refetch: fetchProposals,
     isConnected,
   };

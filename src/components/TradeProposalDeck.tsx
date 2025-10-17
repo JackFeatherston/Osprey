@@ -199,13 +199,19 @@ export default function TradeProposalDeck({ proposals, onApprove, onReject }: Tr
 
             <div className="flex gap-4">
               <button
-                onClick={() => handleApprove}
+                onClick={async () => {
+                  await handleApprove(selectedProposal)
+                  setSelectedProposal(null)
+                }}
                 className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-semibold transition-colors"
               >
                 Approve Trade
               </button>
               <button
-                onClick={() => handleReject}
+                onClick={async () => {
+                  await handleReject(selectedProposal)
+                  setSelectedProposal(null)
+                }}
                 className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold transition-colors"
               >
                 Reject
