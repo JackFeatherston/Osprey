@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { Wifi, WifiOff, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface SystemHealth {
   api: 'online' | 'offline' | 'error';
@@ -137,44 +138,47 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
   }
 
   return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">System Status</span>
-        <span className="text-xs text-gray-500">
-          Last checked: {lastCheck.toLocaleTimeString()}
-        </span>
-      </div>
-      
-      <div className="grid grid-row-3 gap-2 text-sm">
-        {/* API Status */}
+    <Card className={`bg-neutral-800 border-neutral-700 text-white h-full ${className}`}>
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <span className="text-gray-600">Backend Server</span>
-          <Badge variant="outline" className={getStatusColor(health.api)}>
-            {getStatusIcon('api', health.api)}
-            <span className="ml-1 capitalize">{health.api}</span>
-          </Badge>
+          <CardTitle className="text-xl font-normal text-neutral-100">System Status</CardTitle>
+          <span className="text-xs text-neutral-500">
+            Last checked: {lastCheck.toLocaleTimeString()}
+          </span>
         </div>
+        <p className="text-sm text-neutral-400 mt-1">Real-time health and connectivity</p>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-row-3 gap-3 text-sm">
+          {/* API Status */}
+          <div className="flex items-center justify-between py-2">
+            <span className="text-neutral-300">API</span>
+            <Badge variant="outline" className={`${getStatusColor(health.api)} border-0`}>
+              {getStatusIcon('api', health.api)}
+              <span className="ml-1 capitalize">{health.api}</span>
+            </Badge>
+          </div>
 
-        {/* Database Status */}
-        <div className="flex items-center justify-between">
-          <span className="text-gray-600">Supabase Database</span>
-          <Badge variant="outline" className={getStatusColor(health.database)}>
-            {getStatusIcon('database', health.database)}
-            <span className="ml-1 capitalize">{health.database}</span>
-          </Badge>
+          {/* Database Status */}
+          <div className="flex items-center justify-between py-2">
+            <span className="text-neutral-300">Database</span>
+            <Badge variant="outline" className={`${getStatusColor(health.database)} border-0`}>
+              {getStatusIcon('database', health.database)}
+              <span className="ml-1 capitalize">{health.database}</span>
+            </Badge>
+          </div>
+
+          {/* WebSocket Status */}
+          <div className="flex items-center justify-between py-2">
+            <span className="text-neutral-300">Real-time</span>
+            <Badge variant="outline" className={`${getStatusColor(health.websocket)} border-0`}>
+              {getStatusIcon('websocket', health.websocket)}
+              <span className="ml-1 capitalize">{health.websocket}</span>
+            </Badge>
+          </div>
         </div>
-
-
-        {/* WebSocket Status */}
-        <div className="flex items-center justify-between">
-          <span className="text-gray-600">Live Updates</span>
-          <Badge variant="outline" className={getStatusColor(health.websocket)}>
-            {getStatusIcon('websocket', health.websocket)}
-            <span className="ml-1 capitalize">{health.websocket}</span>
-          </Badge>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 

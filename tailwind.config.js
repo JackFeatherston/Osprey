@@ -49,5 +49,32 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function ({ addUtilities }) {
+      addUtilities({
+        '.scrollbar-thin': {
+          'scrollbar-width': 'thin',
+        },
+        '.scrollbar-thumb-neutral-600': {
+          'scrollbar-color': '#525252 transparent',
+        },
+        '.scrollbar-track-neutral-800': {
+          'scrollbar-color': '#262626 transparent',
+        },
+        '.scrollbar-thin::-webkit-scrollbar': {
+          width: '8px',
+        },
+        '.scrollbar-thin::-webkit-scrollbar-track': {
+          background: 'transparent',
+        },
+        '.scrollbar-thin::-webkit-scrollbar-thumb': {
+          'background-color': '#525252',
+          'border-radius': '4px',
+        },
+        '.scrollbar-thin::-webkit-scrollbar-thumb:hover': {
+          'background-color': '#737373',
+        },
+      })
+    },
+  ],
 }

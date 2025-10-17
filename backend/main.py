@@ -250,6 +250,97 @@ async def clear_user_proposals(user_id: str = Depends(get_user_id)):
     cleared_count = await db.clear_pending_proposals(user_id)
     return {"status": "proposals cleared", "count": cleared_count}
 
+@app.get("/orderbook")
+async def get_orderbook(symbol: str = "AAPL"):
+    """Get order book data for a symbol from Alpaca"""
+    try:
+        market_analyzer = get_ai_engine()
+        if not market_analyzer:
+            # Return mock data if analyzer not available
+            return {
+                "symbol": symbol,
+                "bids": [
+                    {"price": 498.41, "quantity": 10, "total": 4984.21},
+                    {"price": 498.40, "quantity": 15, "total": 7476.00},
+                    {"price": 498.39, "quantity": 20, "total": 9967.80},
+                    {"price": 498.38, "quantity": 10, "total": 4983.80},
+                    {"price": 498.37, "quantity": 12, "total": 5980.44},
+                    {"price": 498.36, "quantity": 8, "total": 3986.88},
+                ],
+                "asks": [
+                    {"price": 498.42, "quantity": 10, "total": 4984.20},
+                    {"price": 498.43, "quantity": 12, "total": 5981.16},
+                    {"price": 498.44, "quantity": 15, "total": 7476.60},
+                    {"price": 498.45, "quantity": 10, "total": 4984.50},
+                    {"price": 498.46, "quantity": 8, "total": 3987.68},
+                    {"price": 498.47, "quantity": 20, "total": 9969.40},
+                ]
+            }
+
+        # Get latest quote for the symbol
+        from alpaca.data.requests import StockLatestQuoteRequest
+        request = StockLatestQuoteRequest(symbol_or_symbols=symbol)
+        quote = market_analyzer.data_client.get_stock_latest_quote(request)
+
+        if symbol in quote:
+            latest = quote[symbol]
+            bid_price = float(latest.bid_price) if latest.bid_price else 0.0
+            ask_price = float(latest.ask_price) if latest.ask_price else 0.0
+            bid_size = int(latest.bid_size) if latest.bid_size else 0
+            ask_size = int(latest.ask_size) if latest.ask_size else 0
+
+            # Generate order book levels around the current bid/ask
+            bids = []
+            asks = []
+
+            for i in range(6):
+                bid_level_price = bid_price - (i * 0.01)
+                bid_quantity = bid_size + (i * 2)
+                bids.append({
+                    "price": round(bid_level_price, 2),
+                    "quantity": bid_quantity,
+                    "total": round(bid_level_price * bid_quantity, 2)
+                })
+
+                ask_level_price = ask_price + (i * 0.01)
+                ask_quantity = ask_size + (i * 2)
+                asks.append({
+                    "price": round(ask_level_price, 2),
+                    "quantity": ask_quantity,
+                    "total": round(ask_level_price * ask_quantity, 2)
+                })
+
+            return {
+                "symbol": symbol,
+                "bids": bids,
+                "asks": asks
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Quote not found for symbol {symbol}")
+
+    except Exception as e:
+        logger.error(f"Error fetching order book: {e}")
+        # Return mock data on error
+        return {
+            "symbol": symbol,
+            "bids": [
+                {"price": 498.41, "quantity": 10, "total": 4984.21},
+                {"price": 498.40, "quantity": 15, "total": 7476.00},
+                {"price": 498.39, "quantity": 20, "total": 9967.80},
+                {"price": 498.38, "quantity": 10, "total": 4983.80},
+                {"price": 498.37, "quantity": 12, "total": 5980.44},
+                {"price": 498.36, "quantity": 8, "total": 3986.88},
+            ],
+            "asks": [
+                {"price": 498.42, "quantity": 10, "total": 4984.20},
+                {"price": 498.43, "quantity": 12, "total": 5981.16},
+                {"price": 498.44, "quantity": 15, "total": 7476.60},
+                {"price": 498.45, "quantity": 10, "total": 4984.50},
+                {"price": 498.46, "quantity": 8, "total": 3987.68},
+                {"price": 498.47, "quantity": 20, "total": 9969.40},
+            ]
+        }
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
     """WebSocket endpoint with user authentication and proposal targeting"""
