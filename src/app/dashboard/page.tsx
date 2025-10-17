@@ -66,7 +66,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-[1fr_1fr_1fr] gap-6">
             {/* Left - Order Book */}
             <div className="col-span-1">
-              <OrderBook symbol="AAPL" />
+              <OrderBook />
             </div>
 
             {/* Middle - Buying Power */}

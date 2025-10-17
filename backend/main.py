@@ -280,26 +280,7 @@ async def get_orderbook(symbol: str = "AAPL"):
     try:
         market_analyzer = get_ai_engine()
         if not market_analyzer:
-            # Return mock data if analyzer not available
-            return {
-                "symbol": symbol,
-                "bids": [
-                    {"price": 498.41, "quantity": 10, "total": 4984.21},
-                    {"price": 498.40, "quantity": 15, "total": 7476.00},
-                    {"price": 498.39, "quantity": 20, "total": 9967.80},
-                    {"price": 498.38, "quantity": 10, "total": 4983.80},
-                    {"price": 498.37, "quantity": 12, "total": 5980.44},
-                    {"price": 498.36, "quantity": 8, "total": 3986.88},
-                ],
-                "asks": [
-                    {"price": 498.42, "quantity": 10, "total": 4984.20},
-                    {"price": 498.43, "quantity": 12, "total": 5981.16},
-                    {"price": 498.44, "quantity": 15, "total": 7476.60},
-                    {"price": 498.45, "quantity": 10, "total": 4984.50},
-                    {"price": 498.46, "quantity": 8, "total": 3987.68},
-                    {"price": 498.47, "quantity": 20, "total": 9969.40},
-                ]
-            }
+            raise HTTPException(status_code=503, detail="Market analyzer not available")
 
         # Get latest quote for the symbol
         from alpaca.data.requests import StockLatestQuoteRequest
@@ -342,28 +323,11 @@ async def get_orderbook(symbol: str = "AAPL"):
         else:
             raise HTTPException(status_code=404, detail=f"Quote not found for symbol {symbol}")
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching order book: {e}")
-        # Return mock data on error
-        return {
-            "symbol": symbol,
-            "bids": [
-                {"price": 498.41, "quantity": 10, "total": 4984.21},
-                {"price": 498.40, "quantity": 15, "total": 7476.00},
-                {"price": 498.39, "quantity": 20, "total": 9967.80},
-                {"price": 498.38, "quantity": 10, "total": 4983.80},
-                {"price": 498.37, "quantity": 12, "total": 5980.44},
-                {"price": 498.36, "quantity": 8, "total": 3986.88},
-            ],
-            "asks": [
-                {"price": 498.42, "quantity": 10, "total": 4984.20},
-                {"price": 498.43, "quantity": 12, "total": 5981.16},
-                {"price": 498.44, "quantity": 15, "total": 7476.60},
-                {"price": 498.45, "quantity": 10, "total": 4984.50},
-                {"price": 498.46, "quantity": 8, "total": 3987.68},
-                {"price": 498.47, "quantity": 20, "total": 9969.40},
-            ]
-        }
+        raise HTTPException(status_code=500, detail=f"Failed to fetch order book: {str(e)}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
