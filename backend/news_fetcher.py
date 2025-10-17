@@ -63,7 +63,19 @@ class NewsCache:
 
 class NewsFetcher:
     """News fetcher service with rate limiting and caching"""
-    
+
+    # Mapping of stock symbols to company names for better news search
+    SYMBOL_TO_COMPANY = {
+        "AAPL": "Apple",
+        "GOOGL": "Google Alphabet",
+        "MSFT": "Microsoft",
+        "TSLA": "Tesla",
+        "NVDA": "Nvidia",
+        "AMZN": "Amazon",
+        "META": "Meta Facebook",
+        "NFLX": "Netflix"
+    }
+
     def __init__(self):
         self.newsapi_key = os.getenv("NEWSAPI_KEY")
         if not self.newsapi_key:
@@ -110,8 +122,9 @@ class NewsFetcher:
         # Rate limiting
         await self._rate_limit()
 
-        # Search for company name + stock symbol
-        query = f"{symbol} stock OR {symbol} earnings OR {symbol} trading"
+        # Use company name for broader search, fallback to symbol
+        company_name = self.SYMBOL_TO_COMPANY.get(symbol, symbol)
+        query = company_name
 
         url = "https://newsapi.org/v2/everything"
         params = {
@@ -119,7 +132,7 @@ class NewsFetcher:
             "language": "en",
             "sortBy": "publishedAt",
             "pageSize": max_articles,
-            "from": (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "from": (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
             "apiKey": self.newsapi_key
         }
 

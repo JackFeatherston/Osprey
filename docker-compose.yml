@@ -29,5 +29,6 @@ services:
       - ./backend:/app
     environment:
       - PYTHONPATH=/app
+      - ENABLE_SENTIMENT_ANALYSIS=true
     env_file:
       - .env

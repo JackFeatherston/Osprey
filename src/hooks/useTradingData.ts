@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, AccountInfo, RecentActivity, DashboardStats, AIStatus } from '@/lib/api';
-import { useWebSocket } from './useWebSocket';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Core hook for trade proposals - matches CLAUDE.md workflow
@@ -8,7 +7,9 @@ export function useTradeProposals() {
   const [proposals, setProposals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
   const { user } = useAuth();
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch initial proposals from API
   const fetchProposals = useCallback(async () => {
@@ -31,29 +32,45 @@ export function useTradeProposals() {
     }
   }, [fetchProposals, user]);
 
-  // WebSocket real-time updates - ONLY when authenticated
-  const wsUrl = typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws') + '/ws'
-    : '';
+  // Simple WebSocket connection - only listens for new proposals
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
 
-  const isConnected = useWebSocket(
-    wsUrl,
-    useCallback((message) => {
-      if (message.type === 'trade_proposals') {
-        setProposals(prev => [message.data, ...prev]);
-      } else if (message.type === 'proposal_updated') {
-        setProposals(prev =>
-          prev.map(p => p.id === message.data.id ? message.data : p)
-        );
-      } else if (message.type === 'proposals_cleared') {
-        setProposals(prev => prev.filter(p => p.status !== 'PENDING'));
-        console.log(`${message.data.cleared_count} proposals cleared`);
-      } else if (message.type === 'trade_logs') {
-        fetchProposals();
+    const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws') + '/ws';
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('[WebSocket] Connected');
+      setIsConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        // Only handle new proposal messages
+        if (message.type === 'trade_proposals') {
+          setProposals(prev => [message.data, ...prev]);
+        }
+      } catch (error) {
+        console.error('[WebSocket] Failed to parse message:', error);
       }
-    }, [fetchProposals]),
-    typeof window !== 'undefined' && !!user // Only connect when in browser AND user is authenticated
-  );
+    };
+
+    ws.onclose = () => {
+      console.log('[WebSocket] Disconnected');
+      setIsConnected(false);
+    };
+
+    ws.onerror = (error) => {
+      console.error('[WebSocket] Error:', error);
+    };
+
+    wsRef.current = ws;
+
+    return () => {
+      ws.close();
+    };
+  }, [user]);
 
   // Submit approve/reject decision - core workflow function
   const submitDecision = useCallback(async (proposalId: string, decision: 'APPROVED' | 'REJECTED', notes?: string) => {
@@ -73,12 +90,13 @@ export function useTradeProposals() {
   const clearProposals = useCallback(async () => {
     try {
       await api.clearProposals();
-      // Local state will be updated via WebSocket message
+      // Refetch to update state
+      await fetchProposals();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to clear proposals');
       throw err;
     }
-  }, []);
+  }, [fetchProposals]);
 
   return {
     proposals,

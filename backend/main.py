@@ -6,6 +6,7 @@ import json
 import uvicorn
 import asyncio
 import os
+import logging
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from market_analyzer import initialize_ai_engine, get_ai_engine
@@ -17,6 +18,9 @@ import threading
 
 # Load environment variables
 load_dotenv()
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 # Lifespan manager for market analyzer
 @asynccontextmanager
@@ -75,7 +79,7 @@ class TradeDecision(BaseModel):
 # Initialize Supabase client
 db = get_supabase_client()
 
-# Minimal WebSocket connection manager
+# WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Set[WebSocket] = set()
@@ -142,16 +146,16 @@ async def create_proposal(proposal: TradeProposal, user_id: str = Depends(get_us
 @app.post("/decisions")
 async def submit_decision(decision: TradeDecision):
     proposal = await db.get_trade_proposal(decision.proposal_id)
-    
+
     decision_data = {
         "proposal_id": decision.proposal_id,
         "user_id": proposal["user_id"],
         "decision": decision.decision,
         "notes": getattr(decision, 'notes', None)
     }
-    
+
     created_decision = await db.create_trade_decision(decision_data)
-    
+
     execution_success = False
 
     if decision.decision == "APPROVED":
@@ -168,7 +172,7 @@ async def submit_decision(decision: TradeDecision):
 
             execution_record = await db.create_trade_execution(execution_data)
             execution_result = await market_analyzer.execute_trade(proposal)
-            
+
             if execution_result:
                 await db.update_trade_execution(execution_record["id"], {
                     "execution_status": "FILLED",
@@ -176,32 +180,11 @@ async def submit_decision(decision: TradeDecision):
                     "executed_at": datetime.now().isoformat()
                 })
                 execution_success = True
-    
-    log_entry = {
-        "proposal_id": decision.proposal_id,
-        "symbol": proposal["symbol"],
-        "action": proposal["action"],
-        "decision": decision.decision,
-        "executed": execution_success,
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    # Broadcast directly via WebSocket
-    await manager.broadcast({
-        'type': 'trade_logs',
-        'data': log_entry
-    })
-    
-    updated_proposal = await db.get_trade_proposal(decision.proposal_id)
-    await manager.broadcast({
-        'type': 'proposal_updated',
-        'data': updated_proposal
-    })
-    
+
     result = {"status": "decision recorded", "decision": decision.decision}
     if decision.decision == "APPROVED":
         result["executed"] = execution_success
-    
+
     return result
 
 @app.get("/decisions")
@@ -265,52 +248,29 @@ async def get_account_info():
 async def clear_user_proposals(user_id: str = Depends(get_user_id)):
     """Clear all pending proposals for the user"""
     cleared_count = await db.clear_pending_proposals(user_id)
-    
-    # Broadcast the clearing to connected clients
-    await manager.broadcast({
-        'type': 'proposals_cleared',
-        'data': {'user_id': user_id, 'cleared_count': cleared_count}
-    })
-    
     return {"status": "proposals cleared", "count": cleared_count}
 
-@app.post("/ai-engine/start")
-async def start_ai_engine_manual():
-    """Manually start the market analyzer (kept as /ai-engine/start for frontend compatibility)"""
-    market_analyzer = get_ai_engine()
-    if market_analyzer:
-        if not market_analyzer.is_running:
-            analyzer_task = asyncio.create_task(market_analyzer.start())
-            app.state.analyzer_task = analyzer_task
-            return {"status": "Market analyzer started"}
-        else:
-            return {"status": "Market analyzer already running"}
-    return {"status": "Market analyzer not initialized"}
-
-@app.post("/ai-engine/stop")
-async def stop_ai_engine_manual():
-    """Manually stop the market analyzer (kept as /ai-engine/stop for frontend compatibility)"""
-    market_analyzer = get_ai_engine()
-    if market_analyzer:
-        market_analyzer.stop()
-        if hasattr(app.state, 'analyzer_task'):
-            app.state.analyzer_task.cancel()
-        return {"status": "Market analyzer stopped"}
-    return {"status": "Market analyzer not initialized"}
-
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """Minimal WebSocket endpoint - just connect and listen"""
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
+    """WebSocket endpoint with user authentication and proposal targeting"""
     await manager.connect(websocket)
+    logger.info("WebSocket connection accepted")
 
-    try:
-        # Keep connection alive - just receive and ignore messages
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        pass
-    finally:
-        manager.disconnect(websocket)
+    user_id = "d6c02463-eb2d-4d5a-9ba3-cc97d20910b3"
+    market_analyzer = get_ai_engine()
+
+    if market_analyzer:
+        market_analyzer.add_target_user(user_id)
+        logger.info(f"User {user_id} registered for proposals. Target users: {market_analyzer.get_target_users()}")
+    else:
+        logger.error("Market analyzer not available!")
+
+    while True:
+        data = await websocket.receive_text()
+
+    market_analyzer.remove_target_user(user_id)
+    logger.info(f"User {user_id} unregistered from proposals")
+    manager.disconnect(websocket)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

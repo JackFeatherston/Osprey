@@ -6,11 +6,12 @@ with technical indicators for trading decisions.
 import logging
 import pandas as pd
 import numpy as np
+import os
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from market_analyzer import TradingStrategy
 from news_fetcher import get_news_fetcher, NewsArticle
-from finbert_news_analyzer import get_sentiment_analyzer
+from vader_sentiment_analyzer import get_vader_sentiment_analyzer
 
 logger = logging.getLogger(__name__)
 
@@ -19,22 +20,30 @@ class SentimentEnhancedStrategy(TradingStrategy):
     Trading strategy that combines news sentiment analysis with technical indicators
     """
     
-    def __init__(self, 
+    def __init__(self,
                  sentiment_threshold: float = 0.3,
                  min_articles: int = 2,
                  price_change_window: int = 5,
                  volume_multiplier: float = 1.5):
         super().__init__("Sentiment_Enhanced")
-        
+
         # Strategy parameters
         self.sentiment_threshold = sentiment_threshold  # Minimum sentiment score for trade
         self.min_articles = min_articles  # Minimum news articles required
         self.price_change_window = price_change_window  # Days to look back for price trends
         self.volume_multiplier = volume_multiplier  # Volume spike threshold
-        
-        # Initialize services
-        self.sentiment_analyzer = get_sentiment_analyzer()
-        
+
+        # Check if sentiment analysis is enabled
+        self.sentiment_enabled = os.getenv("ENABLE_SENTIMENT_ANALYSIS", "false").lower() == "true"
+
+        # Initialize VADER sentiment analyzer if enabled
+        if self.sentiment_enabled:
+            self.sentiment_analyzer = get_vader_sentiment_analyzer()
+            logger.info("Sentiment analysis ENABLED using VADER")
+        else:
+            self.sentiment_analyzer = None
+            logger.info("Sentiment analysis DISABLED (set ENABLE_SENTIMENT_ANALYSIS=true to enable)")
+
         # Cache for sentiment analysis to avoid repeated API calls
         self.sentiment_cache = {}
         self.cache_ttl = timedelta(minutes=30)
@@ -128,6 +137,10 @@ class SentimentEnhancedStrategy(TradingStrategy):
     
     async def _get_sentiment_analysis(self, symbol: str) -> Tuple[float, Dict]:
         """Get sentiment analysis for symbol with caching"""
+        # If sentiment analysis is disabled, return neutral sentiment
+        if not self.sentiment_enabled or not self.sentiment_analyzer:
+            return 0.0, {"article_count": 0, "avg_confidence": 0.0}
+
         cache_key = f"{symbol}_{datetime.now().strftime('%Y%m%d_%H')}"  # Cache by hour
 
         # Check cache
@@ -176,23 +189,26 @@ class SentimentEnhancedStrategy(TradingStrategy):
         # If no news data available, use technical analysis only
         if sentiment_summary.get("article_count", 0) == 0:
             logger.info(f"Using technical analysis only for {symbol}")
-            # Technical-only signal criteria (more conservative)
-            if technical_score > 0.3:  # Higher threshold for technical-only
+            logger.info(f"DEBUG {symbol}: technical_score={technical_score}, checking > 0.015 or < -0.015")
+            # Technical-only signal criteria (lowered threshold)
+            if technical_score > 0.015:  # Lowered threshold for technical-only
                 action = "BUY"
-            elif technical_score < -0.3:
+                logger.info(f"DEBUG {symbol}: BUY signal triggered")
+            elif technical_score < -0.015:
                 action = "SELL"
+                logger.info(f"DEBUG {symbol}: SELL signal triggered")
         else:
             # Combined sentiment + technical analysis
-            # Buy signal criteria
-            if (sentiment_score > self.sentiment_threshold and 
-                technical_score > 0.1 and 
-                combined_score > 0.25):
+            # Buy signal criteria (lowered thresholds for more signals)
+            if (sentiment_score > 0.1 and
+                technical_score > 0.0 and
+                combined_score > 0.05):
                 action = "BUY"
-                
-            # Sell signal criteria  
-            elif (sentiment_score < -self.sentiment_threshold and 
-                  technical_score < -0.1 and 
-                  combined_score < -0.25):
+
+            # Sell signal criteria (lowered thresholds)
+            elif (sentiment_score < -0.1 and
+                  technical_score < 0.0 and
+                  combined_score < -0.05):
                 action = "SELL"
         
         if not action:
