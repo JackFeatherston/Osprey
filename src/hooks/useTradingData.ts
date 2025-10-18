@@ -8,8 +8,9 @@ export function useTradeProposals() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const { user } = useAuth(); 
+  const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
+  const disconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch initial proposals from API
   const fetchProposals = useCallback(async () => {
@@ -34,19 +35,29 @@ export function useTradeProposals() {
 
   // Simple WebSocket connection - only listens for new proposals
   useEffect(() => {
-    if (!user || typeof window === 'undefined') return;
+    if (!user || typeof window === 'undefined') {
+      console.log('[WebSocket] Skipping connection:', { user: !!user, isWindow: typeof window !== 'undefined' });
+      return;
+    }
 
     const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws') + '/ws';
+    console.log('[WebSocket] Attempting to connect to:', wsUrl);
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log('[WebSocket] Connected');
+      console.log('[WebSocket] ✓ Connected successfully');
+      // Clear any pending disconnect timeout
+      if (disconnectTimeoutRef.current) {
+        clearTimeout(disconnectTimeoutRef.current);
+        disconnectTimeoutRef.current = null;
+      }
       setIsConnected(true);
     };
 
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        console.log('[WebSocket] Received message:', message);
         // Only handle new proposal messages
         if (message.type === 'trade_proposals') {
           setProposals(prev => [message.data, ...prev]);
@@ -56,18 +67,28 @@ export function useTradeProposals() {
       }
     };
 
-    ws.onclose = () => {
-      console.log('[WebSocket] Disconnected');
-      setIsConnected(false);
+    ws.onclose = (event) => {
+      console.log('[WebSocket] ✗ Disconnected', { code: event.code, reason: event.reason });
+      // Delay setting disconnected state to avoid flickering during rapid reconnects
+      // This is especially helpful in React development mode with Strict Mode
+      disconnectTimeoutRef.current = setTimeout(() => {
+        setIsConnected(false);
+      }, 500); // 500ms delay
     };
 
     ws.onerror = (error) => {
-      console.error('[WebSocket] Error:', error);
+      console.error('[WebSocket] ✗ Error occurred:', error);
     };
 
     wsRef.current = ws;
 
     return () => {
+      console.log('[WebSocket] Cleaning up connection');
+      // Clear any pending disconnect timeout
+      if (disconnectTimeoutRef.current) {
+        clearTimeout(disconnectTimeoutRef.current);
+        disconnectTimeoutRef.current = null;
+      }
       ws.close();
     };
   }, [user]);

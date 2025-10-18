@@ -296,12 +296,23 @@ async def get_orderbook(symbol: str = "AAPL"):
             bid_size = int(latest.bid_size) if latest.bid_size else 0
             ask_size = int(latest.ask_size) if latest.ask_size else 0
 
+            # Validate ask/bid prices - ask should be greater than bid
+            # and spread should be reasonable (< 10%)
+            if ask_price <= bid_price or (ask_price - bid_price) / bid_price > 0.10:
+                logger.warning(f"Invalid ask/bid prices for {symbol}: bid=${bid_price}, ask=${ask_price}. Calculating synthetic ask.")
+                # Calculate synthetic ask with 0.01% spread
+                ask_price = bid_price * 1.0001
+                if ask_size == 0:
+                    ask_size = bid_size
+
             # Generate order book levels around the current bid/ask
+            # Use 0.05% of price per level for realistic spread
+            price_increment = max(bid_price * 0.0005, 0.01)  # At least 1 cent
             bids = []
             asks = []
 
             for i in range(6):
-                bid_level_price = bid_price - (i * 0.01)
+                bid_level_price = bid_price - (i * price_increment)
                 bid_quantity = bid_size + (i * 2)
                 bids.append({
                     "price": round(bid_level_price, 2),
@@ -309,7 +320,7 @@ async def get_orderbook(symbol: str = "AAPL"):
                     "total": round(bid_level_price * bid_quantity, 2)
                 })
 
-                ask_level_price = ask_price + (i * 0.01)
+                ask_level_price = ask_price + (i * price_increment)
                 ask_quantity = ask_size + (i * 2)
                 asks.append({
                     "price": round(ask_level_price, 2),
@@ -396,12 +407,18 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
     else:
         logger.error("Market analyzer not available!")
 
-    while True:
-        data = await websocket.receive_text()
-
-    market_analyzer.remove_target_user(user_id)
-    logger.info(f"User {user_id} unregistered from proposals")
-    manager.disconnect(websocket)
+    try:
+        # Keep connection alive without blocking
+        # The client only receives messages, never sends them
+        while True:
+            await asyncio.sleep(1)  # Keep connection alive with periodic sleep
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for user {user_id}")
+    finally:
+        if market_analyzer:
+            market_analyzer.remove_target_user(user_id)
+            logger.info(f"User {user_id} unregistered from proposals")
+        manager.disconnect(websocket)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
