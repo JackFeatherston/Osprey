@@ -267,49 +267,72 @@ class SupabaseClient:
             return await response.json()
 
     async def get_order_history(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get complete order history - all proposals that have decisions, with execution data"""
-        # Query trade_decisions and join with trade_proposals and trade_executions
-        select_query = "*, trade_proposals!inner(*), trade_executions(*)"
-        params = {"select": select_query, "order": "created_at.desc"}
+        """Get complete order history - all proposals that have decisions"""
+        try:
+            # Query trade_decisions and join with trade_proposals only
+            select_query = "*, trade_proposals!inner(*)"
+            params = {"select": select_query, "order": "created_at.desc"}
 
-        if user_id:
-            params["user_id"] = f"eq.{user_id}"
+            if user_id:
+                params["user_id"] = f"eq.{user_id}"
 
-        session = await self._get_session()
-        async with session.get(f"{self.rest_url}/trade_decisions", params=params) as response:
-            response.raise_for_status()
-            decisions = await response.json()
+            session = await self._get_session()
+            async with session.get(f"{self.rest_url}/trade_decisions", params=params) as response:
+                # If query fails (e.g., no data or relationship issue), return empty array
+                if response.status != 200:
+                    logger.warning(f"Failed to fetch order history: {response.status} {await response.text()}")
+                    return []
 
-            # Flatten the joined data for easier consumption
-            result = []
-            for decision in decisions:
-                proposal = decision.get('trade_proposals', {})
-                # trade_executions is an array since it's a one-to-many relationship
-                executions = decision.get('trade_executions', [])
-                execution = executions[0] if executions else {}
+                decisions = await response.json()
 
-                result.append({
-                    'decision_id': decision.get('id'),
-                    'proposal_id': decision.get('proposal_id'),
-                    'symbol': proposal.get('symbol'),
-                    'action': proposal.get('action'),
-                    'quantity': proposal.get('quantity'),
-                    'price': proposal.get('price'),
-                    'total_value': proposal.get('price', 0) * proposal.get('quantity', 0),
-                    'reason': proposal.get('reason'),
-                    'strategy': proposal.get('strategy'),
-                    'decision': decision.get('decision'),
-                    'decision_notes': decision.get('notes'),
-                    'decided_at': decision.get('created_at'),
-                    'decision_at': decision.get('created_at'),  # Alias for compatibility
-                    'proposed_at': proposal.get('created_at'),
-                    # Execution data
-                    'execution_status': execution.get('execution_status'),
-                    'executed_price': execution.get('executed_price'),
-                    'executed_at': execution.get('executed_at'),
-                    'user_id': decision.get('user_id')
-                })
-            return result
+                # Get all proposal IDs to fetch executions
+                proposal_ids = [d.get('proposal_id') for d in decisions if d.get('proposal_id')]
+
+                # Fetch executions for all proposals in one query
+                executions_map = {}
+                if proposal_ids:
+                    exec_params = {
+                        "select": "*",
+                        "proposal_id": f"in.({','.join(proposal_ids)})"
+                    }
+                    async with session.get(f"{self.rest_url}/trade_executions", params=exec_params) as exec_response:
+                        if exec_response.status == 200:
+                            executions = await exec_response.json()
+                            # Map executions by proposal_id
+                            for execution in executions:
+                                executions_map[execution.get('proposal_id')] = execution
+
+                # Flatten the joined data for easier consumption
+                result = []
+                for decision in decisions:
+                    proposal = decision.get('trade_proposals', {})
+                    execution = executions_map.get(decision.get('proposal_id'), {})
+
+                    result.append({
+                        'decision_id': decision.get('id'),
+                        'proposal_id': decision.get('proposal_id'),
+                        'symbol': proposal.get('symbol'),
+                        'action': proposal.get('action'),
+                        'quantity': proposal.get('quantity'),
+                        'price': proposal.get('price'),
+                        'total_value': proposal.get('price', 0) * proposal.get('quantity', 0),
+                        'reason': proposal.get('reason'),
+                        'strategy': proposal.get('strategy'),
+                        'decision': decision.get('decision'),
+                        'decision_notes': decision.get('notes'),
+                        'decided_at': decision.get('created_at'),
+                        'decision_at': decision.get('created_at'),  # Alias for compatibility
+                        'proposed_at': proposal.get('created_at'),
+                        # Execution data
+                        'execution_status': execution.get('execution_status'),
+                        'executed_price': execution.get('executed_price'),
+                        'executed_at': execution.get('executed_at'),
+                        'user_id': decision.get('user_id')
+                    })
+                return result
+        except Exception as e:
+            logger.error(f"Error fetching order history: {e}")
+            return []
 
     # Utility Methods
 

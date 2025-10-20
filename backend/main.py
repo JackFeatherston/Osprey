@@ -54,7 +54,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -148,6 +148,9 @@ async def create_proposal(proposal: TradeProposal, user_id: str = Depends(get_us
 @app.post("/decisions")
 async def submit_decision(decision: TradeDecision):
     proposal = await db.get_trade_proposal(decision.proposal_id)
+
+    if not proposal:
+        raise HTTPException(status_code=404, detail=f"Proposal {decision.proposal_id} not found")
 
     decision_data = {
         "proposal_id": decision.proposal_id,

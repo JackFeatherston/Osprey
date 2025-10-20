@@ -33,7 +33,7 @@ export function useTradeProposals() {
     }
   }, [fetchProposals, user]);
 
-  // Simple WebSocket connection - only listens for new proposals
+  // Simple WebSocket connection
   useEffect(() => {
     if (!user || typeof window === 'undefined') {
       console.log('[WebSocket] Skipping connection:', { user: !!user, isWindow: typeof window !== 'undefined' });
