@@ -10,6 +10,7 @@ import MarketMonitor from '@/components/MarketMonitor'
 import SystemStatus from '@/components/SystemStatus'
 import BuyingPower from '@/components/BuyingPower'
 import MarketChartsGrid from '@/components/MarketChartsGrid'
+import OrderHistory from '@/components/OrderHistory'
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
@@ -52,47 +53,49 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Grid Layout */}
-        <div className="grid grid-rows-[420px_minmax(500px,_1fr)] gap-6 h-[calc(100vh-8rem)]">
-          {/* Top Section - Trade Proposals Deck + Market Charts */}
-          <div className="grid grid-cols-[1fr_550px] gap-6 overflow-visible">
-            {/* Left - Trade Proposals Deck */}
-            <div className="overflow-visible">
-              <TradeProposalDeck
-                proposals={dashboard.proposals.proposals}
-                onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
-                onReject={(id, notes) => dashboard.proposals.submitDecision(id, 'REJECTED', notes)}
-              />
-            </div>
-
-            {/* Right - Market Charts Grid */}
-            <div className="overflow-hidden">
-              <MarketChartsGrid watchlist={dashboard.ai.status?.watchlist} />
-            </div>
+        {/* Top Section - Trade Proposals Deck + Market Charts */}
+        <div className="grid grid-cols-[1fr_550px] gap-6 mb-6">
+          {/* Left - Trade Proposals Deck */}
+          <div className="h-[420px]">
+            <TradeProposalDeck
+              proposals={dashboard.proposals.proposals}
+              onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
+              onReject={(id, notes) => dashboard.proposals.submitDecision(id, 'REJECTED', notes)}
+            />
           </div>
 
-          {/* Bottom Section - Three Columns */}
-          <div className="grid grid-cols-[1fr_1fr_1fr] gap-6">
-            {/* Left - Order Book */}
-            <div className="col-span-1">
-              <OrderBook />
-            </div>
+          {/* Right - Market Charts Grid */}
+          <div className="h-[420px]">
+            <MarketChartsGrid watchlist={dashboard.ai.status?.watchlist} />
+          </div>
+        </div>
 
-            {/* Middle - Buying Power */}
-            <div className="col-span-1">
-              <BuyingPower />
-            </div>
+        {/* Middle Section - Three Columns */}
+        <div className="grid grid-cols-[1fr_1fr_1fr] gap-6 mb-6">
+          {/* Left - Order Book */}
+          <div className="col-span-1">
+            <OrderBook />
+          </div>
 
-            {/* Right - System Status and Market Monitor */}
-            <div className="col-span-1 grid grid-rows-2 gap-6">
-              <div>
-                <SystemStatus websocketStatus={dashboard.connectionState || 'disconnected'} />
-              </div>
-              <div>
-                <MarketMonitor watchlist={dashboard.ai.status?.watchlist} />
-              </div>
+          {/* Middle - Buying Power */}
+          <div className="col-span-1">
+            <BuyingPower />
+          </div>
+
+          {/* Right - System Status and Market Monitor */}
+          <div className="col-span-1 grid grid-rows-2 gap-6">
+            <div>
+              <SystemStatus websocketStatus={dashboard.connectionState || 'disconnected'} />
+            </div>
+            <div>
+              <MarketMonitor watchlist={dashboard.ai.status?.watchlist} />
             </div>
           </div>
+        </div>
+
+        {/* Order History - Full Width at Bottom */}
+        <div>
+          <OrderHistory />
         </div>
       </div>
     </div>

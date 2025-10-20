@@ -251,11 +251,11 @@ async def get_dashboard_stats(user_id: str = Depends(get_user_id)):
         "sell_trades": portfolio_summary.get("sell_trades", 0)
     }
 
-@app.get("/recent-activity")
-async def get_recent_activity(limit: int = 10, user_id: str = Depends(get_user_id)):
-    """Get recent trading activity"""
-    activity = await db.get_recent_activity(user_id, limit)
-    return activity
+@app.get("/order-history")
+async def get_order_history(user_id: str = Depends(get_user_id)):
+    """Get complete order history - all trade decisions with proposal details"""
+    history = await db.get_order_history(user_id)
+    return history
 
 @app.get("/account")
 async def get_account_info():

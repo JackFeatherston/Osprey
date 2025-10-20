@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, AccountInfo, RecentActivity, DashboardStats, AIStatus } from '@/lib/api';
+import { api, AccountInfo, OrderHistoryItem, DashboardStats, AIStatus } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Core hook for trade proposals - matches CLAUDE.md workflow
@@ -205,25 +205,25 @@ export function useAIStatus() {
   return { status, loading, error };
 }
 
-// Simple hook for recent activity
-export function useRecentActivity(limit?: number) {
-  const [activity, setActivity] = useState<RecentActivity[]>([]);
+// Hook for order history (replaces useRecentActivity)
+export function useRecentActivity() {
+  const [activity, setActivity] = useState<OrderHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getRecentActivity(limit);
+      const data = await api.getOrderHistory();
       setActivity(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch activity');
+      setError(err instanceof Error ? err.message : 'Failed to fetch order history');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, []);
 
   useEffect(() => {
     fetch();

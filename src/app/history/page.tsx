@@ -23,7 +23,7 @@ import Link from 'next/link'
 export default function HistoryPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
-  const { activity, loading: activityLoading, error: activityError, refetch: refetchActivity } = useRecentActivity(50)
+  const { activity, loading: activityLoading, error: activityError, refetch: refetchActivity } = useRecentActivity()
   const { proposals, loading: proposalsLoading, refetch: refetchProposals } = useTradeProposals()
 
   const [filter, setFilter] = useState<'all' | 'approved' | 'rejected' | 'executed'>('all')

@@ -254,18 +254,6 @@ class SupabaseClient:
                     "total_trade_volume": 0
                 }
 
-    async def get_recent_activity(self, user_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get recent trade activity using the view"""
-        params = {"select": "*", "limit": str(limit)}
-
-        if user_id:
-            params["user_id"] = f"eq.{user_id}"
-
-        session = await self._get_session()
-        async with session.get(f"{self.rest_url}/recent_trade_activity", params=params) as response:
-            response.raise_for_status()
-            return await response.json()
-
     async def get_active_proposals(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get active (pending and not expired) proposals using the view"""
         params = {"select": "*", "order": "created_at.desc"}
@@ -277,6 +265,51 @@ class SupabaseClient:
         async with session.get(f"{self.rest_url}/active_proposals", params=params) as response:
             response.raise_for_status()
             return await response.json()
+
+    async def get_order_history(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get complete order history - all proposals that have decisions, with execution data"""
+        # Query trade_decisions and join with trade_proposals and trade_executions
+        select_query = "*, trade_proposals!inner(*), trade_executions(*)"
+        params = {"select": select_query, "order": "created_at.desc"}
+
+        if user_id:
+            params["user_id"] = f"eq.{user_id}"
+
+        session = await self._get_session()
+        async with session.get(f"{self.rest_url}/trade_decisions", params=params) as response:
+            response.raise_for_status()
+            decisions = await response.json()
+
+            # Flatten the joined data for easier consumption
+            result = []
+            for decision in decisions:
+                proposal = decision.get('trade_proposals', {})
+                # trade_executions is an array since it's a one-to-many relationship
+                executions = decision.get('trade_executions', [])
+                execution = executions[0] if executions else {}
+
+                result.append({
+                    'decision_id': decision.get('id'),
+                    'proposal_id': decision.get('proposal_id'),
+                    'symbol': proposal.get('symbol'),
+                    'action': proposal.get('action'),
+                    'quantity': proposal.get('quantity'),
+                    'price': proposal.get('price'),
+                    'total_value': proposal.get('price', 0) * proposal.get('quantity', 0),
+                    'reason': proposal.get('reason'),
+                    'strategy': proposal.get('strategy'),
+                    'decision': decision.get('decision'),
+                    'decision_notes': decision.get('notes'),
+                    'decided_at': decision.get('created_at'),
+                    'decision_at': decision.get('created_at'),  # Alias for compatibility
+                    'proposed_at': proposal.get('created_at'),
+                    # Execution data
+                    'execution_status': execution.get('execution_status'),
+                    'executed_price': execution.get('executed_price'),
+                    'executed_at': execution.get('executed_at'),
+                    'user_id': decision.get('user_id')
+                })
+            return result
 
     # Utility Methods
 
