@@ -95,13 +95,28 @@ export function useTradeProposals() {
 
   // Submit approve/reject decision - core workflow function
   const submitDecision = useCallback(async (proposalId: string, decision: 'APPROVED' | 'REJECTED', notes?: string) => {
+    // Store original proposal for rollback if API fails
+    const originalProposal = proposals.find(p => p.id === proposalId);
+
+    // OPTIMISTIC UPDATE: Immediately update local state
+    setProposals(prev =>
+      prev.map(p => p.id === proposalId ? { ...p, status: decision } : p)
+    );
+
     try {
       const result = await api.submitDecision({ proposal_id: proposalId, decision, notes });
 
-      // Always update local state since decision was logged
-      setProposals(prev =>
-        prev.map(p => p.id === proposalId ? { ...p, status: decision } : p)
-      );
+      // Dispatch custom event with proposal data for OrderHistory to use
+      if (typeof window !== 'undefined' && originalProposal) {
+        window.dispatchEvent(new CustomEvent('trade-decision-submitted', {
+          detail: {
+            proposalId,
+            decision,
+            proposal: originalProposal,
+            notes
+          }
+        }));
+      }
 
       // If there was an execution error, notify the user but don't throw
       if (result.error) {
@@ -114,10 +129,16 @@ export function useTradeProposals() {
         setError(null);
       }
     } catch (err) {
+      // ROLLBACK: Restore original proposal on error
+      if (originalProposal) {
+        setProposals(prev =>
+          prev.map(p => p.id === proposalId ? originalProposal : p)
+        );
+      }
       setError(err instanceof Error ? err.message : 'Failed to submit decision');
       throw err;
     }
-  }, []);
+  }, [proposals]);
 
   // Clear all pending proposals manually
   const clearProposals = useCallback(async () => {
