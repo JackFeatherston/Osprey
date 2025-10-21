@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 from alpaca.data import StockHistoricalDataClient, StockBarsRequest, TimeFrame
 from alpaca.data.live import StockDataStream
-from alpaca.trading import TradingClient, MarketOrderRequest, OrderSide
+from alpaca.trading import TradingClient, MarketOrderRequest, OrderSide, TimeInForce
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -47,7 +47,10 @@ class MarketAnalyzer:
         # Initialize Alpaca clients
         self.data_client = StockHistoricalDataClient(alpaca_api_key, alpaca_secret_key)
         self.trading_client = TradingClient(alpaca_api_key, alpaca_secret_key, paper=True)  # Paper trading
-        
+
+        # Initialize WebSocket stream for real-time delayed bars (15-min delayed SIP feed)
+        self.stream_client = StockDataStream(alpaca_api_key, alpaca_secret_key)
+
         # Initialize strategies
         from sentiment_trading_strategy import SentimentEnhancedStrategy
         self.strategies = [
@@ -58,103 +61,118 @@ class MarketAnalyzer:
         self.watchlist = ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"]
         
         self.is_running = False
-        
+
+    async def handle_bar_update(self, bar):
+        """
+        Handle incoming bar updates from WebSocket stream.
+        When a new 15-minute bar arrives, analyze the symbol.
+        """
+        symbol = bar.symbol
+        logger.info(f"Received bar update for {symbol} at {bar.timestamp}: close=${bar.close}")
+
+        # Fetch historical intraday data for analysis
+        # We need historical context, not just the single bar from WebSocket
+        intraday_data = await self.fetch_intraday_bars(symbol)
+
+        if intraday_data is None or len(intraday_data) < 20:
+            logger.warning(f"Insufficient historical data for {symbol} after bar update")
+            return
+
+        # Run strategy analysis on the updated data
+        for strategy in self.strategies:
+            signal = await strategy.analyze(intraday_data, symbol)
+            if signal:
+                logger.info(f"Generated trade signal for {symbol} from bar update: {signal}")
+                await self.generate_proposal(symbol, signal, strategy.name)
+
     async def start(self):
-        """Start the market analyzer"""
+        """Start the market analyzer with WebSocket streaming"""
         self.is_running = True
-        
-        while self.is_running:
-            await self.analyze_markets()
-            await asyncio.sleep(60)
+
+        logger.info("Market analyzer starting...")
+
+        # Initial sentiment refresh on startup
+        for strategy in self.strategies:
+            if hasattr(strategy, 'refresh_daily_sentiment'):
+                logger.info("Performing initial sentiment refresh...")
+                await strategy.refresh_daily_sentiment(self.watchlist)
+
+        # Subscribe to 15-minute bars for all watchlist symbols
+        logger.info(f"Subscribing to 15-minute bars for: {', '.join(self.watchlist)}")
+        self.stream_client.subscribe_bars(self.handle_bar_update, *self.watchlist)
+
+        # Create sentiment refresh task (checks every hour, refreshes if needed)
+        async def sentiment_refresh_loop():
+            while self.is_running:
+                await asyncio.sleep(3600)  # Check every hour
+                for strategy in self.strategies:
+                    if hasattr(strategy, 'needs_sentiment_refresh') and strategy.needs_sentiment_refresh():
+                        logger.info("Daily sentiment cache expired, refreshing...")
+                        await strategy.refresh_daily_sentiment(self.watchlist)
+
+        # Run WebSocket stream and sentiment refresh concurrently
+        sentiment_task = asyncio.create_task(sentiment_refresh_loop())
+
+        logger.info("Starting WebSocket stream (event-driven bar updates)...")
+        await self.stream_client.run()  # This runs until stopped
     
     def stop(self):
-        """Stop the market analyzer"""
+        """Stop the market analyzer and WebSocket stream"""
         self.is_running = False
+        self.stream_client.stop()
     
     async def analyze_markets(self):
         """Analyze market data for all watchlist symbols"""
         for symbol in self.watchlist:
             await self.analyze_symbol(symbol)
     
-    async def analyze_symbol(self, symbol: str):
-        """Analyze a specific symbol and generate proposals if needed"""
-        logger.info(f"Analyzing symbol {symbol}...")
+    async def fetch_intraday_bars(self, symbol: str, days: int = 7) -> Optional[pd.DataFrame]:
+        """
+        Fetch 15-minute intraday bars for a symbol.
+        Returns last 7 days of 15-minute data (enough for technical analysis).
+        Free tier: Uses 15-minute delayed SIP data (most recent data available).
+        """
+        end_date = datetime.now() - timedelta(minutes=15)
+        start_date = end_date - timedelta(days=days)
 
-        # Use delayed data - end date is 1 day ago to avoid SIP data restrictions
-        end_date = datetime.now() - timedelta(days=1)
-        start_date = end_date - timedelta(days=100)
-
-        # First, try with delayed daily data
         request_params = StockBarsRequest(
             symbol_or_symbols=[symbol],
-            timeframe=TimeFrame.Day,
+            timeframe=TimeFrame.Minute15,
             start=start_date,
             end=end_date
         )
 
         bars = self.data_client.get_stock_bars(request_params)
-        logger.info(f"Retrieved {len(bars.df) if not bars.df.empty else 0} daily bars for {symbol}")
 
-        if not bars.df.empty:
-            df = bars.df.reset_index()
-            df = df[df['symbol'] == symbol].copy()
-            logger.info(f"Processed {len(df)} daily bars for {symbol}")
+        if bars.df.empty:
+            logger.warning(f"No 15-minute bars available for {symbol}")
+            return None
 
-            if len(df) > 0:
-                for strategy in self.strategies:
-                    signal = await strategy.analyze(df, symbol)
-                    if signal:
-                        logger.info(f"Generated trade signal for {symbol}: {signal}")
-                        await self.generate_proposal(symbol, signal, strategy.name)
-                    else:
-                        logger.info(f"No signal generated by {strategy.name} for {symbol}")
-                return
+        df = bars.df.reset_index()
+        df = df[df['symbol'] == symbol].copy()
 
-        # If daily data fails, try hourly data with shorter timeframe
-        logger.info(f"Trying hourly data for {symbol}...")
-        short_end_date = datetime.now() - timedelta(days=2)
-        short_start_date = short_end_date - timedelta(days=30)
+        logger.info(f"Fetched {len(df)} 15-minute bars for {symbol}")
+        return df
 
-        request_params = StockBarsRequest(
-            symbol_or_symbols=[symbol],
-            timeframe=TimeFrame.Hour,
-            start=short_start_date,
-            end=short_end_date
-        )
+    async def analyze_symbol(self, symbol: str):
+        """Analyze a specific symbol using intraday 15-minute bars"""
+        logger.info(f"Analyzing symbol {symbol} with intraday data...")
 
-        bars = self.data_client.get_stock_bars(request_params)
-        logger.info(f"Retrieved {len(bars.df) if not bars.df.empty else 0} hourly bars for {symbol}")
+        # Fetch 15-minute intraday bars
+        intraday_data = await self.fetch_intraday_bars(symbol)
 
-        if not bars.df.empty:
-            df = bars.df.reset_index()
-            df = df[df['symbol'] == symbol].copy()
+        if intraday_data is None or len(intraday_data) < 20:
+            logger.warning(f"Insufficient intraday data for {symbol}, skipping")
+            return
 
-            # Convert hourly to daily by resampling
-            if len(df) > 0:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df = df.set_index('timestamp')
-                daily_df = df.resample('D').agg({
-                    'open': 'first',
-                    'high': 'max',
-                    'low': 'min',
-                    'close': 'last',
-                    'volume': 'sum'
-                }).dropna()
-                daily_df = daily_df.reset_index()
-
-                logger.info(f"Converted {len(df)} hourly bars to {len(daily_df)} daily bars for {symbol}")
-
-                if len(daily_df) > 10:
-                    for strategy in self.strategies:
-                        signal = await strategy.analyze(daily_df, symbol)
-                        if signal:
-                            logger.info(f"Generated trade signal for {symbol}: {signal}")
-                            await self.generate_proposal(symbol, signal, strategy.name)
-                        else:
-                            logger.info(f"No signal generated by {strategy.name} for {symbol}")
-                    return
-
-        logger.warning(f"All data sources failed for {symbol}, skipping symbol")
+        # Run strategy analysis on intraday data
+        for strategy in self.strategies:
+            signal = await strategy.analyze(intraday_data, symbol)
+            if signal:
+                logger.info(f"Generated trade signal for {symbol}: {signal}")
+                await self.generate_proposal(symbol, signal, strategy.name)
+            else:
+                logger.info(f"No signal generated by {strategy.name} for {symbol}")
     
     async def generate_proposal(self, symbol: str, signal: Dict, strategy_name: str):
         """Generate and store trade proposals for all target users"""
@@ -205,11 +223,12 @@ class MarketAnalyzer:
     async def execute_trade(self, proposal: Dict) -> bool:
         """Execute an approved trade"""
         order_side = OrderSide.BUY if proposal["action"] == "BUY" else OrderSide.SELL
-        
+
         market_order_data = MarketOrderRequest(
             symbol=proposal["symbol"],
             qty=proposal["quantity"],
-            side=order_side
+            side=order_side,
+            time_in_force=TimeInForce.DAY
         )
         
         order = self.trading_client.submit_order(order_data=market_order_data)

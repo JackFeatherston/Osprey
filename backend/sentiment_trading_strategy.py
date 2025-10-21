@@ -44,48 +44,169 @@ class SentimentEnhancedStrategy(TradingStrategy):
             self.sentiment_analyzer = None
             logger.info("Sentiment analysis DISABLED (set ENABLE_SENTIMENT_ANALYSIS=true to enable)")
 
-        # Cache for sentiment analysis to avoid repeated API calls
-        self.sentiment_cache = {}
-        self.cache_ttl = timedelta(minutes=30)
-    
+        # Daily sentiment cache (strategic direction layer)
+        # Maps symbol -> {"bias": "BULLISH"/"BEARISH"/"NEUTRAL", "score": float, "timestamp": datetime}
+        self.daily_sentiment_cache = {}
+        self.last_sentiment_refresh = None
+        self.sentiment_cache_ttl = timedelta(hours=24)  # Refresh daily
+
+    async def refresh_daily_sentiment(self, symbols: List[str]):
+        """
+        Refresh daily sentiment analysis for all symbols.
+        This is the strategic layer that determines BULLISH/BEARISH/NEUTRAL bias.
+        Called once per day.
+        """
+        if not self.sentiment_enabled or not self.sentiment_analyzer:
+            logger.info("Sentiment analysis disabled, skipping daily sentiment refresh")
+            for symbol in symbols:
+                self.daily_sentiment_cache[symbol] = {
+                    "bias": "NEUTRAL",
+                    "score": 0.0,
+                    "timestamp": datetime.now()
+                }
+            self.last_sentiment_refresh = datetime.now()
+            return
+
+        logger.info(f"Refreshing daily sentiment for {len(symbols)} symbols...")
+
+        news_fetcher = await get_news_fetcher()
+        async with news_fetcher:
+            for symbol in symbols:
+                # Fetch recent news articles
+                articles = await news_fetcher.get_news_for_symbol(symbol, max_articles=5)
+
+                # Analyze sentiment
+                sentiment_score, sentiment_summary = await self.sentiment_analyzer.get_symbol_sentiment_score(articles)
+
+                # Determine sentiment bias based on score
+                if sentiment_score > self.sentiment_threshold:
+                    bias = "BULLISH"
+                elif sentiment_score < -self.sentiment_threshold:
+                    bias = "BEARISH"
+                else:
+                    bias = "NEUTRAL"
+
+                # Cache the sentiment
+                self.daily_sentiment_cache[symbol] = {
+                    "bias": bias,
+                    "score": sentiment_score,
+                    "article_count": sentiment_summary.get("article_count", 0),
+                    "timestamp": datetime.now()
+                }
+
+                logger.info(f"Daily sentiment for {symbol}: {bias} (score: {sentiment_score:+.2f}, articles: {sentiment_summary.get('article_count', 0)})")
+
+        self.last_sentiment_refresh = datetime.now()
+        logger.info("Daily sentiment refresh complete")
+
+    def needs_sentiment_refresh(self) -> bool:
+        """Check if daily sentiment needs to be refreshed"""
+        if self.last_sentiment_refresh is None:
+            return True
+
+        time_since_refresh = datetime.now() - self.last_sentiment_refresh
+        return time_since_refresh >= self.sentiment_cache_ttl
+
     async def analyze(self, data: pd.DataFrame, symbol: str) -> Optional[Dict]:
         """
-        Analyze market data combined with news sentiment to generate trade signals
+        Analyze intraday market data (15-minute bars) with cached daily sentiment.
+        This is the tactical layer that determines when to enter trades.
         """
-        if len(data) < self.price_change_window:
-            logger.info(f"Insufficient price data for {symbol} ({len(data)} bars)")
+        if len(data) < 20:
+            logger.info(f"Insufficient intraday data for {symbol} ({len(data)} bars, need at least 20)")
+            return None
+
+        # Get cached daily sentiment bias
+        sentiment_data = self.daily_sentiment_cache.get(symbol)
+        if not sentiment_data:
+            logger.info(f"No cached sentiment for {symbol}, skipping analysis")
+            return None
+
+        sentiment_bias = sentiment_data["bias"]
+        sentiment_score = sentiment_data["score"]
+
+        # Skip if sentiment is neutral
+        if sentiment_bias == "NEUTRAL":
+            logger.info(f"Neutral sentiment for {symbol}, skipping trade signal")
             return None
 
         # Get current market data
         current_price = float(data['close'].iloc[-1])
         current_volume = float(data['volume'].iloc[-1])
 
-        # Calculate basic technical indicators
-        price_trend = self._calculate_price_trend(data)
-        volume_signal = self._calculate_volume_signal(data)
+        # Calculate intraday technical indicators
+        price_trend = self._calculate_intraday_price_trend(data)
+        volume_signal = self._calculate_intraday_volume_signal(data)
+        technical_score = self._calculate_technical_score(price_trend, volume_signal)
 
-        # Get news sentiment
-        sentiment_score, sentiment_summary = await self._get_sentiment_analysis(symbol)
-
-        # Check if we have enough news data
-        if sentiment_summary["article_count"] < self.min_articles:
-            logger.info(f"Insufficient news articles for {symbol} ({sentiment_summary['article_count']} articles), proceeding with technical analysis only")
-            # Use neutral sentiment and continue with technical analysis only
-            sentiment_score = 0.0
-            sentiment_summary = {"article_count": 0, "avg_confidence": 0.0}
-
-        # Generate trade signal based on combined analysis
-        signal = await self._generate_trade_signal(
+        # Generate trade signal based on sentiment + technical alignment
+        signal = await self._generate_aligned_trade_signal(
             symbol=symbol,
             current_price=current_price,
+            sentiment_bias=sentiment_bias,
+            sentiment_score=sentiment_score,
             price_trend=price_trend,
             volume_signal=volume_signal,
-            sentiment_score=sentiment_score,
-            sentiment_summary=sentiment_summary
+            technical_score=technical_score
         )
 
         return signal
-    
+
+    def _calculate_intraday_price_trend(self, data: pd.DataFrame) -> Dict:
+        """
+        Calculate price trend indicators for intraday 15-minute bars.
+        Adapted for shorter timeframes: uses bar counts instead of day counts.
+        """
+        # Short-term trend: last 20 bars (5 hours)
+        short_window = min(20, len(data))
+        short_change = (data['close'].iloc[-1] - data['close'].iloc[-short_window]) / data['close'].iloc[-short_window]
+
+        # Medium-term trend: last 80 bars (20 hours, roughly 3 trading days)
+        if len(data) >= 80:
+            medium_change = (data['close'].iloc[-1] - data['close'].iloc[-80]) / data['close'].iloc[-80]
+        else:
+            medium_change = short_change
+
+        # Simple moving average: 40-bar SMA (10 hours)
+        if len(data) >= 40:
+            sma_40 = data['close'].rolling(window=40).mean().iloc[-1]
+            price_vs_sma = (data['close'].iloc[-1] - sma_40) / sma_40
+        else:
+            price_vs_sma = 0.0
+
+        return {
+            "short_term_change": float(short_change),
+            "medium_term_change": float(medium_change),
+            "price_vs_sma": float(price_vs_sma)
+        }
+
+    def _calculate_intraday_volume_signal(self, data: pd.DataFrame) -> Dict:
+        """
+        Calculate volume-based signals for intraday 15-minute bars.
+        """
+        current_volume = data['volume'].iloc[-1]
+
+        # Average volume over past 40 bars
+        if len(data) >= 40:
+            avg_volume = data['volume'].rolling(window=40).mean().iloc[-2]
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+        else:
+            volume_ratio = 1.0
+
+        # Volume trend: recent 20 bars vs previous 20 bars
+        if len(data) >= 40:
+            recent_volume = data['volume'].iloc[-20:].mean()
+            older_volume = data['volume'].iloc[-40:-20].mean()
+            volume_trend = (recent_volume - older_volume) / older_volume if older_volume > 0 else 0.0
+        else:
+            volume_trend = 0.0
+
+        return {
+            "volume_ratio": float(volume_ratio),
+            "volume_trend": float(volume_trend),
+            "is_volume_spike": volume_ratio > self.volume_multiplier
+        }
+
     def _calculate_price_trend(self, data: pd.DataFrame) -> Dict:
         """Calculate price trend indicators"""
         # Short-term trend (5-day)
@@ -242,19 +363,99 @@ class SentimentEnhancedStrategy(TradingStrategy):
     def _calculate_technical_score(self, price_trend: Dict, volume_signal: Dict) -> float:
         """Calculate technical analysis score (-1 to +1)"""
         score = 0.0
-        
+
         # Price trend components
         score += price_trend["short_term_change"] * 0.4
         score += price_trend["medium_term_change"] * 0.3
         score += price_trend["price_vs_sma"] * 0.2
-        
+
         # Volume components
         if volume_signal["is_volume_spike"]:
             score += 0.1 if score > 0 else -0.1  # Volume confirms direction
-        
+
         # Normalize to -1 to +1 range
         return max(-1.0, min(1.0, score))
-    
+
+    async def _generate_aligned_trade_signal(self,
+                                            symbol: str,
+                                            current_price: float,
+                                            sentiment_bias: str,
+                                            sentiment_score: float,
+                                            price_trend: Dict,
+                                            volume_signal: Dict,
+                                            technical_score: float) -> Optional[Dict]:
+        """
+        Generate trade signal only when intraday technicals confirm daily sentiment bias.
+        BULLISH sentiment + uptrend → BUY
+        BEARISH sentiment + downtrend → SELL
+        Conflicts → No signal
+        """
+        action = None
+        quantity = 10
+
+        # BUY signal: BULLISH sentiment confirmed by positive technical score
+        if sentiment_bias == "BULLISH" and technical_score > 0.01:
+            action = "BUY"
+            logger.info(f"BUY signal for {symbol}: BULLISH sentiment confirmed by intraday uptrend (technical: {technical_score:+.3f})")
+
+        # SELL signal: BEARISH sentiment confirmed by negative technical score
+        elif sentiment_bias == "BEARISH" and technical_score < -0.01:
+            action = "SELL"
+            logger.info(f"SELL signal for {symbol}: BEARISH sentiment confirmed by intraday downtrend (technical: {technical_score:+.3f})")
+
+        else:
+            logger.info(f"No signal for {symbol}: sentiment={sentiment_bias}, technical={technical_score:+.3f} (not aligned)")
+            return None
+
+        # Generate reasoning
+        reasoning = await self._generate_aligned_reasoning(
+            symbol=symbol,
+            action=action,
+            sentiment_bias=sentiment_bias,
+            sentiment_score=sentiment_score,
+            price_trend=price_trend,
+            volume_signal=volume_signal,
+            technical_score=technical_score
+        )
+
+        return {
+            "action": action,
+            "price": current_price,
+            "quantity": quantity,
+            "reason": reasoning,
+            "sentiment_score": sentiment_score,
+            "sentiment_bias": sentiment_bias,
+            "technical_score": technical_score
+        }
+
+    async def _generate_aligned_reasoning(self,
+                                         symbol: str,
+                                         action: str,
+                                         sentiment_bias: str,
+                                         sentiment_score: float,
+                                         price_trend: Dict,
+                                         volume_signal: Dict,
+                                         technical_score: float) -> str:
+        """Generate human-readable reasoning for aligned trade signals"""
+
+        # Sentiment component
+        sentiment_strength = "strong" if abs(sentiment_score) > 0.5 else "moderate"
+        sentiment_text = f"{sentiment_strength} {sentiment_bias} sentiment ({sentiment_score:+.2f})"
+
+        # Technical component
+        price_direction = "rising" if technical_score > 0 else "falling"
+        price_change_pct = abs(price_trend["short_term_change"]) * 100
+
+        technical_text = f"intraday price {price_direction} {price_change_pct:.1f}%"
+
+        if volume_signal["is_volume_spike"]:
+            technical_text += f", volume spike {volume_signal['volume_ratio']:.1f}x"
+
+        # Combined reasoning
+        full_reason = f"[{action}] {sentiment_text} confirmed by {technical_text} (technical score: {technical_score:+.2f})"
+
+        return full_reason
+
     async def _generate_reasoning(self, 
                                 symbol: str,
                                 action: str,
