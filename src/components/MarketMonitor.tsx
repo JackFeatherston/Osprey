@@ -1,9 +1,19 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import Image from 'next/image'
 
 interface MarketMonitorProps {
   watchlist?: string[]
+}
+
+// Mapping of ticker symbols to company domains for logo fetching
+const tickerToLogo: Record<string, string> = {
+  'AAPL': 'apple.com',
+  'GOOGL': 'google.com',
+  'TSLA': 'tesla.com',
+  'NVDA': 'nvidia.com',
+  'MSFT': 'microsoft.com',
 }
 
 export default function MarketMonitor({ watchlist }: MarketMonitorProps) {
@@ -22,9 +32,18 @@ export default function MarketMonitor({ watchlist }: MarketMonitorProps) {
           {stocks.map((symbol) => (
             <div
               key={symbol}
-              className="text-2xl font-light text-neutral-300 hover:text-white transition-colors py-2"
+              className="flex items-center gap-3 text-2xl font-light text-neutral-300 hover:text-white transition-colors py-2"
             >
-              {symbol}
+              {tickerToLogo[symbol] && (
+                <Image
+                  src={`https://logo.clearbit.com/${tickerToLogo[symbol]}`}
+                  alt={`${symbol} logo`}
+                  width={32}
+                  height={32}
+                  className="rounded"
+                />
+              )}
+              <span>{symbol}</span>
             </div>
           ))}
         </div>
