@@ -7,7 +7,7 @@ export function useTradeProposals() {
   const [proposals, setProposals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
   const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
   const disconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -42,6 +42,7 @@ export function useTradeProposals() {
 
     const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws') + '/ws';
     console.log('[WebSocket] Attempting to connect to:', wsUrl);
+    setConnectionStatus('connecting');
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -51,7 +52,7 @@ export function useTradeProposals() {
         clearTimeout(disconnectTimeoutRef.current);
         disconnectTimeoutRef.current = null;
       }
-      setIsConnected(true);
+      setConnectionStatus('connected');
     };
 
     ws.onmessage = (event) => {
@@ -72,12 +73,13 @@ export function useTradeProposals() {
       // Delay setting disconnected state to avoid flickering during rapid reconnects
       // This is especially helpful in React development mode with Strict Mode
       disconnectTimeoutRef.current = setTimeout(() => {
-        setIsConnected(false);
-      }, 500); // 500ms delay
+        setConnectionStatus('disconnected');
+      }, 1000); // 1 second delay for more lenient reconnection detection
     };
 
     ws.onerror = (error) => {
       console.error('[WebSocket] ✗ Error occurred:', error);
+      setConnectionStatus('error');
     };
 
     wsRef.current = ws;
@@ -165,7 +167,7 @@ export function useTradeProposals() {
     clearProposals,
     clearError,
     refetch: fetchProposals,
-    isConnected,
+    connectionStatus,
   };
 }
 
@@ -267,7 +269,6 @@ export function useDashboard() {
     activity,
     stats,
     ai,
-    isConnected: proposals.isConnected,
-    connectionState: (proposals.isConnected ? 'connected' : 'disconnected') as 'connected' | 'disconnected' | 'connecting' | 'error',
+    connectionStatus: proposals.connectionStatus,
   };
 }

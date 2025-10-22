@@ -85,7 +85,7 @@ export default function Dashboard() {
           {/* Right - System Status and Market Monitor */}
           <div className="col-span-1 grid grid-rows-2 gap-6">
             <div>
-              <SystemStatus websocketStatus={dashboard.connectionState || 'disconnected'} />
+              <SystemStatus websocketStatus={dashboard.connectionStatus} />
             </div>
             <div>
               <MarketMonitor watchlist={dashboard.ai.status?.watchlist} />

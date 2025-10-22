@@ -66,7 +66,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
         ...prev,
         api: 'online',
         database: 'online',
-        websocket: websocketStatus || prev.websocket,
+        // Don't override websocket status - it's managed independently via prop
         market: checkMarketStatus()
       }));
       setLastCheck(new Date());
@@ -76,7 +76,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
         ...prev,
         api: 'offline',
         database: 'offline',
-        websocket: websocketStatus || prev.websocket,
+        // Don't override websocket status - it's managed independently via prop
         market: checkMarketStatus()
       }));
       setLastCheck(new Date());
