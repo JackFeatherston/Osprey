@@ -86,18 +86,18 @@ export default function TradeProposalCard({
       variants={glassCardVariants}
       initial="rest"
       whileHover={canTakeAction ? "hover" : undefined}
-      className="relative"
+      className="relative h-full"
     >
       <Card
         variant="apple-card"
-        className={`relative overflow-hidden ${
+        className={`relative overflow-hidden h-full flex flex-col ${
           isExpired() ? 'opacity-60' : ''
         } ${
           isBuy ? 'border-l-4 border-l-green-500/50' : 'border-l-4 border-l-red-500/50'
         }`}
       >
         {/* Header Section */}
-        <div className="p-10 pb-8">
+        <div className="pl-6 pr-10 pt-10 pb-8">
 
           {/* Symbol - Hero Typography */}
           <motion.div
@@ -171,9 +171,9 @@ export default function TradeProposalCard({
         </div>
 
         {/* AI Analysis Section */}
-        <div className="px-10 pb-8">
+        <div className="pl-6 pr-10 pb-8 flex-grow flex flex-col">
           <motion.div
-            className="glass-subtle rounded-2xl p-5 border border-white/5"
+            className="glass-subtle rounded-2xl p-5 border border-white/5 flex-grow flex flex-col"
             variants={slideUpVariants}
           >
             <div className="flex items-center gap-2 mb-3">
@@ -192,7 +192,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {canTakeAction && showDetails && (
             <motion.div
-              className="px-10 pb-8"
+              className="pl-6 pr-10 pb-8"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -219,7 +219,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {canTakeAction && (
             <motion.div
-              className="px-10 pb-10 pt-0 flex gap-4"
+              className="pl-6 pr-10 pb-10 pt-0 flex gap-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
@@ -257,7 +257,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {proposal.status !== 'PENDING' && (
             <motion.div
-              className={`mx-10 mb-10 p-4 rounded-2xl text-center text-sm ${
+              className={`ml-6 mr-10 mb-10 p-4 rounded-2xl text-center text-sm ${
                 proposal.status === 'APPROVED'
                   ? 'bg-green-500/10 text-green-400 border border-green-500/30'
                   : proposal.status === 'REJECTED'
@@ -279,7 +279,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {isExpired() && proposal.status === 'PENDING' && (
             <motion.div
-              className="mx-10 mb-10 p-4 rounded-2xl bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 text-center text-sm flex items-center justify-center gap-2"
+              className="ml-6 mr-10 mb-10 p-4 rounded-2xl bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 text-center text-sm flex items-center justify-center gap-2"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
