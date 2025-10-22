@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Wifi, WifiOff, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle, CheckCircle, Clock, Loader2, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -12,6 +12,7 @@ interface SystemHealth {
   api: 'online' | 'offline' | 'error';
   database: 'online' | 'offline' | 'error';
   websocket: 'connected' | 'disconnected' | 'connecting' | 'error';
+  market: 'open' | 'closed';
 }
 
 interface SystemStatusProps {
@@ -21,25 +22,52 @@ interface SystemStatusProps {
 }
 
 export function SystemStatus({ websocketStatus, className, compact = false }: SystemStatusProps) {
+  const checkMarketStatus = (): 'open' | 'closed' => {
+    const now = new Date()
+    const day = now.getDay() // 0 = Sunday, 6 = Saturday
+
+    // Market closed on weekends
+    if (day === 0 || day === 6) {
+      return 'closed'
+    }
+
+    // Convert to ET (UTC-5 or UTC-4 depending on DST)
+    const etOffset = -5 * 60 // ET offset in minutes (simplified, doesn't account for DST)
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000)
+    const etTime = new Date(utcTime + (etOffset * 60000))
+
+    const hours = etTime.getHours()
+    const minutes = etTime.getMinutes()
+    const timeInMinutes = hours * 60 + minutes
+
+    // Market hours: 9:30 AM - 4:00 PM ET
+    const marketOpenTime = 9 * 60 + 30 // 9:30 AM
+    const marketCloseTime = 16 * 60 // 4:00 PM
+
+    return timeInMinutes >= marketOpenTime && timeInMinutes < marketCloseTime ? 'open' : 'closed'
+  }
+
   const [health, setHealth] = useState<SystemHealth>({
     api: 'offline',
     database: 'offline',
-    websocket: websocketStatus || 'disconnected'
+    websocket: websocketStatus || 'disconnected',
+    market: checkMarketStatus()
   });
   const [lastCheck, setLastCheck] = useState<Date>(new Date());
   const [checking, setChecking] = useState(false);
 
   const checkSystemHealth = async () => {
     if (checking) return;
-    
+
     setChecking(true);
     try {
-      const healthCheck = await api.healthCheck();
+      await api.healthCheck();
       setHealth(prev => ({
         ...prev,
         api: 'online',
         database: 'online',
-        websocket: websocketStatus || prev.websocket
+        websocket: websocketStatus || prev.websocket,
+        market: checkMarketStatus()
       }));
       setLastCheck(new Date());
     } catch (error) {
@@ -48,7 +76,8 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
         ...prev,
         api: 'offline',
         database: 'offline',
-        websocket: websocketStatus || prev.websocket
+        websocket: websocketStatus || prev.websocket,
+        market: checkMarketStatus()
       }));
       setLastCheck(new Date());
     } finally {
@@ -75,11 +104,13 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
     switch (status) {
       case 'online':
       case 'connected':
+      case 'open':
         return 'text-green-600 bg-green-100 border-green-300';
       case 'connecting':
         return 'text-yellow-600 bg-yellow-100 border-yellow-300';
       case 'offline':
       case 'disconnected':
+      case 'closed':
         return 'text-gray-600 bg-gray-100 border-gray-300';
       case 'error':
         return 'text-red-600 bg-red-100 border-red-300';
@@ -90,19 +121,26 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
 
   const getStatusIcon = (service: string, status: string) => {
     const iconSize = compact ? 'h-3 w-3' : 'h-4 w-4';
-    
+
     if (checking && service === 'api') {
       return <Loader2 className={`${iconSize} animate-spin`} />;
+    }
+
+    // Special handling for market status
+    if (service === 'market') {
+      return status === 'open' ? <TrendingUp className={iconSize} /> : <Clock className={iconSize} />;
     }
 
     switch (status) {
       case 'online':
       case 'connected':
+      case 'open':
         return <CheckCircle className={iconSize} />;
       case 'connecting':
         return <Clock className={iconSize} />;
       case 'offline':
       case 'disconnected':
+      case 'closed':
         return service === 'websocket' ? <WifiOff className={iconSize} /> : <AlertTriangle className={iconSize} />;
       case 'error':
         return <AlertTriangle className={iconSize} />;
@@ -149,10 +187,10 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
         <p className="text-sm text-neutral-400 mt-1">Real-time health and connectivity</p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-row-3 gap-3 text-sm">
+        <div className="grid grid-row-4 gap-3 text-sm">
           {/* API Status */}
           <div className="flex items-center justify-between py-2">
-            <span className="text-neutral-300">Backend</span>
+            <span className="text-neutral-300">Market Analysis</span>
             <Badge variant="outline" className={`${getStatusColor(health.api)} border-0`}>
               {getStatusIcon('api', health.api)}
               <span className="ml-1 capitalize">{health.api}</span>
@@ -161,7 +199,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
 
           {/* Database Status */}
           <div className="flex items-center justify-between py-2">
-            <span className="text-neutral-300">Supabase</span>
+            <span className="text-neutral-300">Ledger</span>
             <Badge variant="outline" className={`${getStatusColor(health.database)} border-0`}>
               {getStatusIcon('database', health.database)}
               <span className="ml-1 capitalize">{health.database}</span>
@@ -170,10 +208,19 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
 
           {/* WebSocket Status */}
           <div className="flex items-center justify-between py-2">
-            <span className="text-neutral-300">Websocket</span>
+            <span className="text-neutral-300">Trade Streaming</span>
             <Badge variant="outline" className={`${getStatusColor(health.websocket)} border-0`}>
               {getStatusIcon('websocket', health.websocket)}
               <span className="ml-1 capitalize">{health.websocket}</span>
+            </Badge>
+          </div>
+
+          {/* Market Status */}
+          <div className="flex items-center justify-between py-2">
+            <span className="text-neutral-300">Market Hours</span>
+            <Badge variant="outline" className={`${getStatusColor(health.market)} border-0`}>
+              {getStatusIcon('market', health.market)}
+              <span className="ml-1 capitalize">{health.market}</span>
             </Badge>
           </div>
         </div>
