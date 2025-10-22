@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion'
 import { api, AccountInfo } from '@/lib/api'
 import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { DollarSign, Wallet, TrendingUp, AlertCircle, Loader2, Sparkles } from 'lucide-react'
 import { staggerContainer, staggerItem, numberVariants } from '@/lib/animations'
 

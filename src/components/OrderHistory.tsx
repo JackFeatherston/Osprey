@@ -66,7 +66,7 @@ export default function OrderHistory() {
   }, [])
 
   return (
-    <Card variant="glass-panel" className="text-white">
+    <Card variant="glass-panel" animated hover className="text-white">
       <CardHeader className="pb-4">
         <CardTitle className="text-xl font-normal text-neutral-100">Order History</CardTitle>
       </CardHeader>
