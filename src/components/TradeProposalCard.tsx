@@ -57,20 +57,6 @@ export default function TradeProposalCard({
     setIsProcessing(false);
   };
 
-  const getStatusBadge = () => {
-    switch (proposal.status) {
-      case 'PENDING':
-        return <Badge variant="pending" animated><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
-      case 'APPROVED':
-        return <Badge variant="approved" animated><CheckCircle className="h-3 w-3 mr-1" />Approved</Badge>;
-      case 'REJECTED':
-        return <Badge variant="rejected" animated><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
-      case 'EXPIRED':
-        return <Badge variant="outline"><AlertCircle className="h-3 w-3 mr-1" />Expired</Badge>;
-      default:
-        return <Badge variant="outline">Unknown</Badge>;
-    }
-  };
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -112,7 +98,16 @@ export default function TradeProposalCard({
       >
         {/* Header Section */}
         <div className="p-10 pb-8">
-          <div className="flex items-start justify-between mb-8">
+
+          {/* Symbol - Hero Typography */}
+          <motion.div
+            className="mb-4"
+            variants={staggerItem}
+          >
+            <h2 className="text-6xl font-bold tracking-tighter text-white mb-2">
+              {proposal.symbol}
+            </h2>
+            <div className="flex items-start justify-between mb-8">
             {/* Action Badge */}
             <motion.div
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-2xl ${actionBg} border ${actionBorder}`}
@@ -127,19 +122,7 @@ export default function TradeProposalCard({
                 {proposal.action}
               </span>
             </motion.div>
-
-            {/* Status Badge */}
-            {getStatusBadge()}
           </div>
-
-          {/* Symbol - Hero Typography */}
-          <motion.div
-            className="mb-4"
-            variants={staggerItem}
-          >
-            <h2 className="text-6xl font-bold tracking-tighter text-white mb-2">
-              {proposal.symbol}
-            </h2>
             <div className="flex items-center gap-3 text-white/60">
               <Sparkles className="h-4 w-4" />
               <span className="text-sm font-light">{proposal.strategy} Strategy</span>
@@ -159,10 +142,10 @@ export default function TradeProposalCard({
               <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">
                 Quantity
               </div>
-              <div className="text-white text-3xl font-light tracking-tight">
+              <div className="text-white text-3xl font-bold tracking-tight">
                 {proposal.quantity.toLocaleString()}
               </div>
-              <div className="text-white/60 font-bold text-sm mt-0.5">shares</div>
+              <div className="text-white/60 text-sm mt-0.5">shares</div>
             </motion.div>
 
             <motion.div variants={staggerItem}>
@@ -253,7 +236,7 @@ export default function TradeProposalCard({
                 ) : (
                   <CheckCircle className="h-5 w-5 mr-2" />
                 )}
-                {isProcessing ? 'Processing...' : 'Approve Trade'}
+                {isProcessing ? 'Processing...' : 'Approve'}
               </Button>
 
               <Button

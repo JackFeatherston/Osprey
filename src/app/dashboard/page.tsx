@@ -175,7 +175,7 @@ export default function Dashboard() {
 
         {/* Middle Section - Three Columns */}
         <motion.div
-          className="grid grid-cols-[1fr_1fr_1fr] gap-8 mb-8 mt-16"
+          className="grid grid-cols-[1fr_1fr_1fr] gap-8 mb-8 mt-40"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
