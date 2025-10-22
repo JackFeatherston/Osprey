@@ -222,6 +222,9 @@ class MarketAnalyzer:
     
     async def execute_trade(self, proposal: Dict) -> bool:
         """Execute an approved trade"""
+        logger.info(f"=== EXECUTING TRADE ===")
+        logger.info(f"Symbol: {proposal['symbol']}, Action: {proposal['action']}, Qty: {proposal['quantity']}, Price: ${proposal['price']}")
+
         order_side = OrderSide.BUY if proposal["action"] == "BUY" else OrderSide.SELL
 
         market_order_data = MarketOrderRequest(
@@ -230,27 +233,36 @@ class MarketAnalyzer:
             side=order_side,
             time_in_force=TimeInForce.DAY
         )
-        
-        order = self.trading_client.submit_order(order_data=market_order_data)
-        
-        execution_log = {
-            "proposal_id": proposal["id"],
-            "order_id": str(order.id),
-            "symbol": proposal["symbol"],
-            "action": proposal["action"],
-            "quantity": proposal["quantity"],
-            "status": "EXECUTED",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        # Broadcast execution log via WebSocket
-        if self.websocket_manager:
-            await self.websocket_manager.broadcast({
-                'type': 'trade_logs',
-                'data': execution_log
-            })
-        
-        return True
+
+        logger.info(f"Submitting order to Alpaca: {order_side.value} {proposal['quantity']} shares of {proposal['symbol']}")
+
+        try:
+            order = self.trading_client.submit_order(order_data=market_order_data)
+            logger.info(f"Alpaca order submitted successfully! Order ID: {order.id}, Status: {order.status}")
+
+            execution_log = {
+                "proposal_id": proposal["id"],
+                "order_id": str(order.id),
+                "symbol": proposal["symbol"],
+                "action": proposal["action"],
+                "quantity": proposal["quantity"],
+                "status": "EXECUTED",
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Broadcast execution log via WebSocket
+            if self.websocket_manager:
+                await self.websocket_manager.broadcast({
+                    'type': 'trade_logs',
+                    'data': execution_log
+                })
+                logger.info(f"Broadcasted trade execution via WebSocket")
+
+            logger.info(f"=== TRADE EXECUTION COMPLETE ===")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to submit order to Alpaca: {str(e)}", exc_info=True)
+            raise
 
 # Singleton instance for the market analyzer
 market_analyzer_instance: Optional[MarketAnalyzer] = None

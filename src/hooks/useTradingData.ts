@@ -97,16 +97,20 @@ export function useTradeProposals() {
 
   // Submit approve/reject decision - core workflow function
   const submitDecision = useCallback(async (proposalId: string, decision: 'APPROVED' | 'REJECTED', notes?: string) => {
-    // Store original proposal for rollback if API fails
+    // Store original proposal for event dispatch
     const originalProposal = proposals.find(p => p.id === proposalId);
 
-    // OPTIMISTIC UPDATE: Immediately update local state
-    setProposals(prev =>
-      prev.map(p => p.id === proposalId ? { ...p, status: decision } : p)
-    );
+    console.log(`[submitDecision] Starting: ${decision} for proposal ${proposalId}`);
 
     try {
+      // Call API FIRST - no optimistic updates
       const result = await api.submitDecision({ proposal_id: proposalId, decision, notes });
+      console.log(`[submitDecision] API call succeeded:`, result);
+
+      // Only update local state AFTER successful API response
+      setProposals(prev =>
+        prev.map(p => p.id === proposalId ? { ...p, status: decision } : p)
+      );
 
       // Dispatch custom event with proposal data for OrderHistory to use
       if (typeof window !== 'undefined' && originalProposal) {
@@ -115,7 +119,8 @@ export function useTradeProposals() {
             proposalId,
             decision,
             proposal: originalProposal,
-            notes
+            notes,
+            result
           }
         }));
       }
@@ -125,19 +130,23 @@ export function useTradeProposals() {
         console.error('Trade execution error:', result.error);
         setError(`Decision recorded, but execution failed: ${result.error}`);
       } else if (decision === 'APPROVED' && !result.executed) {
-        setError('Decision recorded, but trade execution did not complete');
+        const errorMsg = 'Decision recorded, but trade execution did not complete';
+        console.warn(errorMsg);
+        setError(errorMsg);
       } else {
         // Clear any previous errors on success
         setError(null);
+        console.log(`[submitDecision] Success: ${decision} decision processed and trade executed`);
       }
     } catch (err) {
-      // ROLLBACK: Restore original proposal on error
-      if (originalProposal) {
-        setProposals(prev =>
-          prev.map(p => p.id === proposalId ? originalProposal : p)
-        );
+      // No rollback needed since we never updated optimistically
+      const errorMsg = err instanceof Error ? err.message : 'Failed to submit decision';
+      console.error(`[submitDecision] Failed:`, errorMsg, err);
+      setError(errorMsg);
+      // Show alert to user since this is a critical failure
+      if (typeof window !== 'undefined') {
+        alert(`Failed to submit decision: ${errorMsg}\n\nPlease check your connection and try again.`);
       }
-      setError(err instanceof Error ? err.message : 'Failed to submit decision');
       throw err;
     }
   }, [proposals]);

@@ -147,10 +147,15 @@ async def create_proposal(proposal: TradeProposal, user_id: str = Depends(get_us
 
 @app.post("/decisions")
 async def submit_decision(decision: TradeDecision):
+    logger.info(f"Received decision: {decision.decision} for proposal {decision.proposal_id}")
+
     proposal = await db.get_trade_proposal(decision.proposal_id)
 
     if not proposal:
+        logger.error(f"Proposal {decision.proposal_id} not found")
         raise HTTPException(status_code=404, detail=f"Proposal {decision.proposal_id} not found")
+
+    logger.info(f"Processing {decision.decision} decision for {proposal['symbol']} {proposal['action']} x{proposal['quantity']}")
 
     decision_data = {
         "proposal_id": decision.proposal_id,
@@ -161,11 +166,13 @@ async def submit_decision(decision: TradeDecision):
 
     # Always log the decision first, regardless of execution outcome
     created_decision = await db.create_trade_decision(decision_data)
+    logger.info(f"Decision recorded in database: {created_decision['id']}")
 
     execution_success = False
     execution_error = None
 
     if decision.decision == "APPROVED":
+        logger.info(f"Decision approved - initiating trade execution for {proposal['symbol']}")
         market_analyzer = get_ai_engine()
         if market_analyzer:
             execution_data = {
@@ -178,10 +185,13 @@ async def submit_decision(decision: TradeDecision):
             }
 
             execution_record = await db.create_trade_execution(execution_data)
+            logger.info(f"Created execution record: {execution_record['id']}")
 
             # Wrap trade execution in try-catch to handle failures gracefully
             try:
+                logger.info(f"Calling execute_trade for {proposal['symbol']} {proposal['action']} x{proposal['quantity']}")
                 execution_result = await market_analyzer.execute_trade(proposal)
+                logger.info(f"execute_trade returned: {execution_result}")
 
                 if execution_result:
                     await db.update_trade_execution(execution_record["id"], {
@@ -190,16 +200,18 @@ async def submit_decision(decision: TradeDecision):
                         "executed_at": datetime.now().isoformat()
                     })
                     execution_success = True
+                    logger.info(f"Trade execution SUCCESSFUL for {proposal['symbol']}")
                 else:
                     await db.update_trade_execution(execution_record["id"], {
                         "execution_status": "REJECTED",
                         "error_message": "Trade execution returned false"
                     })
                     execution_error = "Trade execution failed"
+                    logger.warning(f"Trade execution returned False for {proposal['symbol']}")
             except Exception as e:
                 # Log the error and update execution record
                 error_msg = str(e)
-                logger.error(f"Trade execution failed: {error_msg}")
+                logger.error(f"Trade execution FAILED with exception: {error_msg}", exc_info=True)
                 await db.update_trade_execution(execution_record["id"], {
                     "execution_status": "REJECTED",
                     "error_message": error_msg
@@ -207,6 +219,7 @@ async def submit_decision(decision: TradeDecision):
                 execution_error = error_msg
         else:
             execution_error = "Market analyzer not available"
+            logger.error("Market analyzer not available - cannot execute trade")
 
     result = {"status": "decision recorded", "decision": decision.decision}
     if decision.decision == "APPROVED":
@@ -214,6 +227,7 @@ async def submit_decision(decision: TradeDecision):
         if execution_error:
             result["error"] = execution_error
 
+    logger.info(f"Returning result: {result}")
     return result
 
 @app.get("/decisions")
