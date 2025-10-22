@@ -156,12 +156,20 @@ export function BuyingPower({ className }: BuyingPowerProps) {
           <span className="text-white/40 text-xs font-light tracking-wider">
             Account Status
           </span>
-          <Badge
-            variant={accountInfo.status === 'ACTIVE' ? 'success' : 'warning'}
-            animated
+          <motion.div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${
+              accountInfo.status === 'ACTIVE'
+                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+            } transition-colors duration-300`}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            {accountInfo.status}
-          </Badge>
+            <div className={`w-2 h-2 rounded-full ${
+              accountInfo.status === 'ACTIVE' ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'
+            }`} />
+            <span className="text-xs font-semibold capitalize">{accountInfo.status.toLowerCase()}</span>
+          </motion.div>
         </motion.div>
       </motion.div>
     </Card>
