@@ -66,7 +66,7 @@ export default function OrderHistory() {
   }, [])
 
   return (
-    <Card className="bg-neutral-800 border-neutral-700 text-white">
+    <Card variant="glass-panel" className="text-white">
       <CardHeader className="pb-4">
         <CardTitle className="text-xl font-normal text-neutral-100">Order History</CardTitle>
       </CardHeader>
@@ -122,11 +122,11 @@ export default function OrderHistory() {
                       {item.decision}
                     </Badge>
                   </div>
-                  <div className="text-right font-mono text-neutral-200">
+                  <div className="text-right text-neutral-200">
                     ${item.price.toFixed(2)}
                   </div>
                   <div className="text-right text-neutral-200">{item.quantity}</div>
-                  <div className="text-right font-mono text-neutral-200">
+                  <div className="text-right text-neutral-200">
                     ${item.total_value.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2

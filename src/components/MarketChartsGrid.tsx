@@ -14,7 +14,7 @@ export default function MarketChartsGrid({
     ? watchlist
     : ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'NVDA']
   return (
-    <Card className="bg-neutral-800 border-neutral-700 text-white h-full">
+    <Card variant="glass-panel" animated hover className="text-white h-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-xl font-normal text-neutral-100">Market Charts</CardTitle>
       </CardHeader>

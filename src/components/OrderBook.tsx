@@ -78,20 +78,20 @@ export default function OrderBook({ symbols = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 
   }, {} as Record<string, { asks: OrderBookEntry[], bids: OrderBookEntry[] }>)
 
   return (
-    <Card className="bg-neutral-800 border-neutral-700 text-white h-full">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-xl font-normal text-neutral-100">Orderbook</CardTitle>
+    <Card variant="glass-panel" animated hover className="text-white h-full flex flex-col font-light">
+      <CardHeader className="pb-4 flex-shrink-0">
+        <CardTitle className="text-xl font-light text-neutral-100">Orderbook</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1">
+      <CardContent className="space-y-1 flex-1 flex flex-col min-h-0">
         {/* Header */}
-        <div className="grid grid-cols-4 text-xs text-neutral-400 font-medium mb-3 pb-2 border-b border-neutral-700">
+        <div className="grid grid-cols-4 text-xs text-neutral-400 mb-3 pb-2 border-b border-neutral-700 flex-shrink-0">
           <div>Ticker</div>
           <div>Price</div>
           <div className="text-center">Quantity</div>
           <div className="text-right">Total Value</div>
         </div>
 
-        <div className="max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-neutral-600 scrollbar-track-neutral-800">
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
           {symbols.map((symbol) => {
             const { asks, bids } = groupedEntries[symbol] || { asks: [], bids: [] }
 
@@ -112,10 +112,10 @@ export default function OrderBook({ symbols = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 
                           transition: 'width 0.3s ease'
                         }}
                       />
-                      <div className="relative z-10 text-neutral-300 font-semibold">{ask.symbol}</div>
-                      <div className="relative z-10 text-red-400 font-mono">${ask.price.toFixed(2)}</div>
+                      <div className="relative z-10 text-neutral-300">{ask.symbol}</div>
+                      <div className="relative z-10 text-red-400 ">${ask.price.toFixed(2)}</div>
                       <div className="relative z-10 text-center text-neutral-200">{ask.quantity}</div>
-                      <div className="relative z-10 text-right text-neutral-200 font-mono">${ask.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="relative z-10 text-right text-neutral-200">${ask.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                     </div>
                   ))}
                 </div>
@@ -135,10 +135,10 @@ export default function OrderBook({ symbols = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 
                           transition: 'width 0.3s ease'
                         }}
                       />
-                      <div className="relative z-10 text-neutral-300 font-semibold">{bid.symbol}</div>
-                      <div className="relative z-10 text-green-400 font-mono">${bid.price.toFixed(2)}</div>
+                      <div className="relative z-10 text-neutral-300">{bid.symbol}</div>
+                      <div className="relative z-10 text-green-400">${bid.price.toFixed(2)}</div>
                       <div className="relative z-10 text-center text-neutral-200">{bid.quantity}</div>
-                      <div className="relative z-10 text-right text-neutral-200 font-mono">${bid.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="relative z-10 text-right text-neutral-200">${bid.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                     </div>
                   ))}
                 </div>

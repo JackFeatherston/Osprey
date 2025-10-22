@@ -1,12 +1,34 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion'
 import { api, AccountInfo } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DollarSign, Wallet, TrendingUp, AlertCircle, Loader2 } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { DollarSign, Wallet, TrendingUp, AlertCircle, Loader2, Sparkles } from 'lucide-react'
+import { staggerContainer, staggerItem, numberVariants } from '@/lib/animations'
 
 interface BuyingPowerProps {
   className?: string
+}
+
+function AnimatedNumber({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const motionValue = useSpring(0, { stiffness: 100, damping: 30, mass: 1 })
+  const rounded = useTransform(motionValue, (latest) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(latest)
+  )
+
+  useEffect(() => {
+    motionValue.set(value)
+  }, [value, motionValue])
+
+  return <motion.span>{rounded}</motion.span>
 }
 
 export function BuyingPower({ className }: BuyingPowerProps) {
@@ -48,94 +70,100 @@ export function BuyingPower({ className }: BuyingPowerProps) {
 
   if (loading) {
     return (
-      <Card className={`bg-neutral-800 border-neutral-700 text-white h-full ${className}`}>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xl font-normal text-neutral-100">Account Balance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+      <Card variant="glass-panel" className={`h-full ${className}`}>
+        <div className="p-8">
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-10 w-10 animate-spin text-white/40" />
           </div>
-        </CardContent>
+        </div>
       </Card>
     )
   }
 
   if (error || !accountInfo) {
     return (
-      <Card className={`bg-neutral-800 border-neutral-700 text-white h-full ${className}`}>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xl font-normal text-neutral-100">Account Balance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-red-400">
-            <AlertCircle className="h-5 w-5" />
-            <span className="text-sm">{error || 'No account data available'}</span>
+      <Card variant="glass-panel" className={`h-full ${className}`}>
+        <div className="p-8">
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <AlertCircle className="h-10 w-10 text-red-400" />
+            <span className="text-sm text-white/60">{error || 'No account data available'}</span>
           </div>
-        </CardContent>
+        </div>
       </Card>
     )
   }
 
   return (
-    <Card className={`bg-neutral-800 border-neutral-700 text-white h-full ${className}`}>
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xl font-normal text-neutral-100">Account Balance</CardTitle>
-          <span className="text-xs text-neutral-500">
-            Updated: {lastUpdate.toLocaleTimeString()}
+    <Card variant="glass-panel" animated hover className={`h-full ${className}`}>
+      <motion.div
+        className="p-8"
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Header */}
+        <motion.div className="flex items-center justify-between mb-8" variants={staggerItem}>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-light tracking-wider text-neutral-100">
+              Account Balance
+            </h3>
+          </div>
+          <span className="text-xs text-white/40 font-light">
+            {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
-        </div>
-        <p className="text-sm text-neutral-400 mt-1">Trading account overview</p>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {/* Buying Power */}
-          <div className="flex items-center justify-between py-3 border-b border-neutral-700">
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-400" />
-              <span className="text-neutral-300">Buying Power</span>
-            </div>
-            <span className="text-xl font-semibold text-white">
-              {formatCurrency(accountInfo.buying_power)}
-            </span>
-          </div>
+        </motion.div>
 
-          {/* Cash */}
-          <div className="flex items-center justify-between py-3 border-b border-neutral-700">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-blue-400" />
-              <span className="text-neutral-300">Cash</span>
-            </div>
-            <span className="text-lg font-medium text-neutral-100">
-              {formatCurrency(accountInfo.cash)}
-            </span>
+        {/* Hero - Buying Power */}
+        <motion.div className="mb-10" variants={staggerItem}>
+          <div className="text-white/40 text-xs font-light tracking-wider mb-2">
+            Buying Power
           </div>
+          <div className="text-white text-7xl font-bold tracking-tighter leading-none mb-1">
+            <AnimatedNumber value={accountInfo.buying_power} />
+          </div>
+          <div className="text-white/40 text-sm font-light">Available for trading</div>
+        </motion.div>
+
+        {/* Secondary Metrics */}
+        <motion.div className="grid grid-cols-2 gap-6" variants={staggerContainer}>
+          {/* Cash */}
+          <motion.div variants={staggerItem} className="glass-subtle rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-white/40 text-xs font-light  tracking-wider">
+                Cash
+              </span>
+            </div>
+            <div className="text-white text-2xl font-bold tracking-tight">
+              {formatCurrency(accountInfo.cash)}
+            </div>
+          </motion.div>
 
           {/* Portfolio Value */}
-          <div className="flex items-center justify-between py-3 border-b border-neutral-700">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-purple-400" />
-              <span className="text-neutral-300">Portfolio Value</span>
+          <motion.div variants={staggerItem} className="glass-subtle rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-white/40 text-xs font-light tracking-wider">
+                Portfolio
+              </span>
             </div>
-            <span className="text-lg font-medium text-neutral-100">
+            <div className="text-white text-2xl font-bold tracking-tight">
               {formatCurrency(accountInfo.portfolio_value)}
-            </span>
-          </div>
+            </div>
+          </motion.div>
+        </motion.div>
 
-          {/* Account Status */}
-          <div className="flex items-center justify-between py-3">
-            <span className="text-neutral-300">Status</span>
-            <span className={`text-sm px-3 py-1 rounded-full font-medium ${
-              accountInfo.status === 'ACTIVE'
-                ? 'bg-green-900/30 text-green-400'
-                : 'bg-yellow-900/30 text-yellow-400'
-            }`}>
-              {accountInfo.status}
-            </span>
-          </div>
-        </div>
-      </CardContent>
+        {/* Account Status */}
+        <motion.div className="mt-6 flex items-center justify-between" variants={staggerItem}>
+          <span className="text-white/40 text-xs font-light tracking-wider">
+            Account Status
+          </span>
+          <Badge
+            variant={accountInfo.status === 'ACTIVE' ? 'success' : 'warning'}
+            animated
+          >
+            {accountInfo.status}
+          </Badge>
+        </motion.div>
+      </motion.div>
     </Card>
   )
 }

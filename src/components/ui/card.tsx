@@ -1,20 +1,49 @@
 import * as React from "react"
-
+import { motion, HTMLMotionProps } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { cardHoverVariants, glassCardVariants } from "@/lib/animations"
 
-const Card = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "rounded-xl border bg-card text-card-foreground shadow",
-      className
-    )}
-    {...props}
-  />
-))
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'default' | 'glass' | 'glass-strong' | 'glass-subtle' | 'apple-card' | 'glass-panel'
+  animated?: boolean
+  hover?: boolean
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, variant = 'default', animated = false, hover = false, ...props }, ref) => {
+    const baseStyles = "rounded-2xl text-card-foreground transition-all duration-300"
+
+    const variantStyles = {
+      default: "border bg-card shadow-lg",
+      glass: "glass",
+      'glass-strong': "glass-strong",
+      'glass-subtle': "glass-subtle",
+      'apple-card': "apple-card",
+      'glass-panel': "glass-panel",
+    }
+
+    const Component = animated ? motion.div : 'div'
+    const motionProps = animated
+      ? {
+          initial: "rest",
+          whileHover: hover ? "hover" : undefined,
+          whileTap: hover ? "tap" : undefined,
+          variants: variant.includes('glass') || variant === 'apple-card'
+            ? glassCardVariants
+            : cardHoverVariants,
+        }
+      : {}
+
+    return (
+      <Component
+        ref={ref}
+        className={cn(baseStyles, variantStyles[variant], className)}
+        {...motionProps}
+        {...props}
+      />
+    )
+  }
+)
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<
@@ -35,7 +64,10 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("font-semibold leading-none tracking-tight", className)}
+    className={cn(
+      "text-2xl font-bold leading-tight tracking-tight",
+      className
+    )}
     {...props}
   />
 ))
@@ -47,7 +79,10 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn(
+      "text-sm font-light text-muted-foreground/80",
+      className
+    )}
     {...props}
   />
 ))

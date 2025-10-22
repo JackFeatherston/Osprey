@@ -33,7 +33,7 @@ export default function CandlestickChart({ symbol, height = 200 }: CandlestickCh
       width: chartContainerRef.current.clientWidth,
       height: height,
       layout: {
-        background: { type: 'solid' as const, color: '#262626' }, // neutral-800
+        background: { color: 'transparent' },
         textColor: '#a3a3a3', // neutral-400
       },
       grid: {

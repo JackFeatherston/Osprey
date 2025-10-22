@@ -3,7 +3,10 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { useDashboard } from '@/hooks/useTradingData'
+import { Button } from '@/components/ui/button'
+import { LogOut, Loader2 } from 'lucide-react'
 import TradeProposalDeck from '@/components/TradeProposalDeck'
 import OrderBook from '@/components/OrderBook'
 import MarketMonitor from '@/components/MarketMonitor'
@@ -11,6 +14,7 @@ import SystemStatus from '@/components/SystemStatus'
 import BuyingPower from '@/components/BuyingPower'
 import MarketChartsGrid from '@/components/MarketChartsGrid'
 import OrderHistory from '@/components/OrderHistory'
+import { pageVariants, staggerContainer, staggerItem } from '@/lib/animations'
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
@@ -30,8 +34,11 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-900">
-        <div className="text-lg text-white">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center theme-charcoal">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-white/40" />
+          <div className="text-lg text-white/60 font-light">Loading your dashboard...</div>
+        </div>
       </div>
     )
   }
@@ -41,63 +48,94 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-900 p-8">
+    <motion.div
+      className="min-h-screen theme-charcoal p-8"
+      variants={pageVariants}
+      initial="initial"
+      animate="enter"
+      exit="exit"
+    >
       <div className="max-w-[1920px] mx-auto">
         {/* Header with Logout */}
-        <div className="flex justify-end mb-4">
-          <button
+        <motion.div
+          className="flex justify-between items-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div>
+            <h1 className="text-4xl font-light text-white tracking-tight">Trading Dashboard</h1>
+          </div>
+          <Button
             onClick={handleSignOut}
-            className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors border border-neutral-700 rounded-lg hover:border-neutral-500"
+            variant="glass"
+            size="default"
+            className="gap-2"
           >
+            <LogOut className="h-4 w-4" />
             Sign Out
-          </button>
-        </div>
+          </Button>
+        </motion.div>
 
         {/* Top Section - Trade Proposals Deck + Market Charts */}
-        <div className="grid grid-cols-[1fr_550px] gap-6 mb-6">
+        <motion.div
+          className="grid grid-cols-[1fr_550px] gap-8 mb-8"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {/* Left - Trade Proposals Deck */}
-          <div className="h-[420px]">
+          <motion.div className="h-[420px]" variants={staggerItem}>
             <TradeProposalDeck
               proposals={dashboard.proposals.proposals}
               onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
               onReject={(id, notes) => dashboard.proposals.submitDecision(id, 'REJECTED', notes)}
             />
-          </div>
+          </motion.div>
 
           {/* Right - Market Charts Grid */}
-          <div className="h-[420px]">
+          <motion.div className="h-[420px]" variants={staggerItem}>
             <MarketChartsGrid watchlist={dashboard.ai.status?.watchlist} />
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Middle Section - Three Columns */}
-        <div className="grid grid-cols-[1fr_1fr_1fr] gap-6 mb-6">
+        <motion.div
+          className="grid grid-cols-[1fr_1fr_1fr] gap-8 mb-8"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {/* Left - Order Book */}
-          <div className="col-span-1">
+          <motion.div className="col-span-1 h-[700px]" variants={staggerItem}>
             <OrderBook />
-          </div>
+          </motion.div>
 
           {/* Middle - Buying Power */}
-          <div className="col-span-1">
+          <motion.div className="col-span-1 h-[700px]" variants={staggerItem}>
             <BuyingPower />
-          </div>
+          </motion.div>
 
           {/* Right - System Status and Market Monitor */}
-          <div className="col-span-1 grid grid-rows-2 gap-6">
+          <motion.div className="col-span-1 grid grid-rows-2 gap-8" variants={staggerItem}>
             <div>
               <SystemStatus websocketStatus={dashboard.connectionStatus} />
             </div>
             <div>
               <MarketMonitor watchlist={dashboard.ai.status?.watchlist} />
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Order History - Full Width at Bottom */}
-        <div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.6 }}
+        >
           <OrderHistory />
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   )
 }
