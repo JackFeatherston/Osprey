@@ -23,16 +23,16 @@ export default function MarketMonitor({ watchlist }: MarketMonitorProps) {
   return (
     <Card className="bg-neutral-800 border-neutral-700 text-white h-full">
       <CardHeader className="pb-4">
-        <CardTitle className="text-xl font-normal text-neutral-100">
+        <CardTitle className="text-xl font-normal text-neutral-100 text-center">
           Market Analyzer Currently Monitoring
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
+        <div className="flex flex-col items-center space-y-3">
           {stocks.map((symbol) => (
             <div
               key={symbol}
-              className="flex items-center gap-3 text-2xl font-light text-neutral-300 hover:text-white transition-colors py-2"
+              className="flex items-center gap-3 text-2xl font-light text-neutral-300 hover:text-white hover:scale-110 transition-all py-2 cursor-pointer"
             >
               {tickerToLogo[symbol] && (
                 <Image
