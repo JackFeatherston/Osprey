@@ -2,11 +2,11 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useDashboard } from '@/hooks/useTradingData'
 import { Button } from '@/components/ui/button'
-import { LogOut, Loader2 } from 'lucide-react'
+import { LogOut, Loader2, Sparkles } from 'lucide-react'
 import TradeProposalDeck from '@/components/TradeProposalDeck'
 import OrderBook from '@/components/OrderBook'
 import MarketMonitor from '@/components/MarketMonitor'
@@ -20,6 +20,8 @@ export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const dashboard = useDashboard()
+  const [generatingTest, setGeneratingTest] = useState(false)
+  const [testProposals, setTestProposals] = useState<any[]>([])
 
   useEffect(() => {
     if (!loading && !user) {
@@ -31,6 +33,62 @@ export default function Dashboard() {
     await signOut()
     router.push('/login')
   }
+
+  const handleGenerateTestProposals = () => {
+    setGeneratingTest(true)
+
+    // Generate test proposals locally for design testing
+    const newTestProposals = [
+      {
+        id: `test-${Date.now()}-1`,
+        symbol: 'AAPL',
+        action: 'BUY' as const,
+        quantity: 50,
+        price: 178.45,
+        reason: 'Strong technical indicators: 50-day MA crossed above 200-day MA (golden cross). RSI at 62 shows bullish momentum without being overbought. Recent product launch driving positive sentiment.',
+        strategy: 'Moving Average Crossover',
+        status: 'PENDING' as const,
+        timestamp: new Date().toISOString(),
+        user_id: user?.id || '',
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString()
+      },
+      {
+        id: `test-${Date.now()}-2`,
+        symbol: 'TSLA',
+        action: 'SELL' as const,
+        quantity: 25,
+        price: 242.18,
+        reason: 'Bearish divergence detected: Price making higher highs while RSI making lower highs. Trading volume decreasing, suggesting weakening uptrend. Profit-taking opportunity after 15% gain.',
+        strategy: 'RSI Divergence',
+        status: 'PENDING' as const,
+        timestamp: new Date().toISOString(),
+        user_id: user?.id || '',
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString()
+      },
+      {
+        id: `test-${Date.now()}-3`,
+        symbol: 'NVDA',
+        action: 'BUY' as const,
+        quantity: 30,
+        price: 495.27,
+        reason: 'Breaking out of consolidation pattern with strong volume. Positive news sentiment around AI chip demand. Support level confirmed at $480, setting up favorable risk/reward ratio.',
+        strategy: 'Breakout Pattern',
+        status: 'PENDING' as const,
+        timestamp: new Date().toISOString(),
+        user_id: user?.id || '',
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString()
+      }
+    ]
+
+    setTestProposals(prev => [...newTestProposals, ...prev])
+    setGeneratingTest(false)
+  }
+
+  // Merge test proposals with real proposals
+  const allProposals = [...testProposals, ...dashboard.proposals.proposals]
 
   if (loading) {
     return (
@@ -66,15 +124,31 @@ export default function Dashboard() {
           <div>
             <h1 className="text-4xl font-light text-white tracking-tight">Trading Dashboard</h1>
           </div>
-          <Button
-            onClick={handleSignOut}
-            variant="glass"
-            size="default"
-            className="gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              onClick={handleGenerateTestProposals}
+              variant="glass"
+              size="default"
+              className="gap-2"
+              disabled={generatingTest}
+            >
+              {generatingTest ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {generatingTest ? 'Generating...' : 'Test Proposals'}
+            </Button>
+            <Button
+              onClick={handleSignOut}
+              variant="glass"
+              size="default"
+              className="gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
         </motion.div>
 
         {/* Top Section - Trade Proposals Deck + Market Charts */}
@@ -87,7 +161,7 @@ export default function Dashboard() {
           {/* Left - Trade Proposals Deck */}
           <motion.div className="h-[420px]" variants={staggerItem}>
             <TradeProposalDeck
-              proposals={dashboard.proposals.proposals}
+              proposals={allProposals}
               onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
               onReject={(id, notes) => dashboard.proposals.submitDecision(id, 'REJECTED', notes)}
             />

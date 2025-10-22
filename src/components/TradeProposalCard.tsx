@@ -159,10 +159,10 @@ export default function TradeProposalCard({
               <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">
                 Quantity
               </div>
-              <div className="text-white text-3xl font-bold tracking-tight">
+              <div className="text-white text-3xl font-light tracking-tight">
                 {proposal.quantity.toLocaleString()}
               </div>
-              <div className="text-white/60 text-sm mt-0.5">shares</div>
+              <div className="text-white/60 font-light text-sm mt-0.5">shares</div>
             </motion.div>
 
             <motion.div variants={staggerItem}>
