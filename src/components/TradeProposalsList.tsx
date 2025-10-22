@@ -82,7 +82,7 @@ export default function TradeProposalsList({
               {pendingProposals.length}
             </span>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-md mx-auto">
             {pendingProposals.map((proposal) => (
               <TradeProposalCard
                 key={proposal.id}
@@ -104,7 +104,7 @@ export default function TradeProposalsList({
               {completedProposals.length}
             </span>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-md mx-auto">
             {completedProposals.slice(0, 5).map((proposal) => (
               <TradeProposalCard
                 key={proposal.id}

@@ -111,8 +111,8 @@ export default function TradeProposalCard({
         }`}
       >
         {/* Header Section */}
-        <div className="p-8 pb-6">
-          <div className="flex items-start justify-between mb-6">
+        <div className="p-10 pb-8">
+          <div className="flex items-start justify-between mb-8">
             {/* Action Badge */}
             <motion.div
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-2xl ${actionBg} border ${actionBorder}`}
@@ -150,7 +150,7 @@ export default function TradeProposalCard({
 
           {/* Trade Metrics - Bold Data */}
           <motion.div
-            className="grid grid-cols-3 gap-6 mt-8"
+            className="grid grid-cols-3 gap-6 mt-10"
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
@@ -162,7 +162,7 @@ export default function TradeProposalCard({
               <div className="text-white text-3xl font-light tracking-tight">
                 {proposal.quantity.toLocaleString()}
               </div>
-              <div className="text-white/60 font-light text-sm mt-0.5">shares</div>
+              <div className="text-white/60 font-bold text-sm mt-0.5">shares</div>
             </motion.div>
 
             <motion.div variants={staggerItem}>
@@ -188,7 +188,7 @@ export default function TradeProposalCard({
         </div>
 
         {/* AI Analysis Section */}
-        <div className="px-8 pb-6">
+        <div className="px-10 pb-8">
           <motion.div
             className="glass-subtle rounded-2xl p-5 border border-white/5"
             variants={slideUpVariants}
@@ -209,7 +209,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {canTakeAction && showDetails && (
             <motion.div
-              className="px-8 pb-6"
+              className="px-10 pb-8"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -236,7 +236,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {canTakeAction && (
             <motion.div
-              className="p-8 pt-0 flex gap-4"
+              className="px-10 pb-10 pt-0 flex gap-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
@@ -274,7 +274,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {proposal.status !== 'PENDING' && (
             <motion.div
-              className={`mx-8 mb-8 p-4 rounded-2xl text-center text-sm ${
+              className={`mx-10 mb-10 p-4 rounded-2xl text-center text-sm ${
                 proposal.status === 'APPROVED'
                   ? 'bg-green-500/10 text-green-400 border border-green-500/30'
                   : proposal.status === 'REJECTED'
@@ -296,7 +296,7 @@ export default function TradeProposalCard({
         <AnimatePresence>
           {isExpired() && proposal.status === 'PENDING' && (
             <motion.div
-              className="mx-8 mb-8 p-4 rounded-2xl bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 text-center text-sm flex items-center justify-center gap-2"
+              className="mx-10 mb-10 p-4 rounded-2xl bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 text-center text-sm flex items-center justify-center gap-2"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}

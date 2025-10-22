@@ -159,7 +159,7 @@ export default function Dashboard() {
           animate="visible"
         >
           {/* Left - Trade Proposals Deck */}
-          <motion.div className="h-[420px]" variants={staggerItem}>
+          <motion.div className="min-h-[700px]" variants={staggerItem}>
             <TradeProposalDeck
               proposals={allProposals}
               onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
@@ -168,14 +168,14 @@ export default function Dashboard() {
           </motion.div>
 
           {/* Right - Market Charts Grid */}
-          <motion.div className="h-[420px]" variants={staggerItem}>
+          <motion.div className="h-[700px]" variants={staggerItem}>
             <MarketChartsGrid watchlist={dashboard.ai.status?.watchlist} />
           </motion.div>
         </motion.div>
 
         {/* Middle Section - Three Columns */}
         <motion.div
-          className="grid grid-cols-[1fr_1fr_1fr] gap-8 mb-8"
+          className="grid grid-cols-[1fr_1fr_1fr] gap-8 mb-8 mt-16"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
