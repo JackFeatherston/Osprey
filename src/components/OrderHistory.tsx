@@ -107,7 +107,7 @@ export default function OrderHistory() {
                           : 'bg-red-900/30 text-red-400 border-red-700'
                       }
                     >
-                      {item.action}
+                      {item.action.charAt(0) + item.action.slice(1).toLowerCase()}
                     </Badge>
                   </div>
                   <div>
@@ -119,7 +119,7 @@ export default function OrderHistory() {
                           : 'bg-neutral-700/50 text-neutral-400 border-neutral-600'
                       }
                     >
-                      {item.decision}
+                      {item.decision.charAt(0) + item.decision.slice(1).toLowerCase()}
                     </Badge>
                   </div>
                   <div className="text-right text-neutral-200">
