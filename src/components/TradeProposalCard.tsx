@@ -38,14 +38,13 @@ export default function TradeProposalCard({
   compact = false
 }: TradeProposalCardProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [notes, setNotes] = useState('');
   const [showDetails, setShowDetails] = useState(!compact);
 
   const handleApprove = async () => {
     if (!onApprove || isProcessing) return;
 
     setIsProcessing(true);
-    await onApprove(proposal.id, notes || undefined);
+    await onApprove(proposal.id);
     setIsProcessing(false);
   };
 
@@ -53,7 +52,7 @@ export default function TradeProposalCard({
     if (!onReject || isProcessing) return;
 
     setIsProcessing(true);
-    await onReject(proposal.id, notes || undefined);
+    await onReject(proposal.id);
     setIsProcessing(false);
   };
 
@@ -86,15 +85,17 @@ export default function TradeProposalCard({
       variants={glassCardVariants}
       initial="rest"
       whileHover={canTakeAction ? "hover" : undefined}
-      className="relative h-full"
+      className="relative"
+      style={{ height: '720px' }}
     >
       <Card
         variant="apple-card"
-        className={`relative overflow-hidden h-full flex flex-col ${
+        className={`relative overflow-hidden flex flex-col ${
           isExpired() ? 'opacity-60' : ''
         } ${
           isBuy ? 'border-l-4 border-l-green-500/50' : 'border-l-4 border-l-red-500/50'
         }`}
+        style={{ height: '720px' }}
       >
         {/* Header Section */}
         <div className="pl-6 pr-10 pt-10 pb-8">
@@ -171,49 +172,24 @@ export default function TradeProposalCard({
         </div>
 
         {/* AI Analysis Section */}
-        <div className="pl-6 pr-10 pb-8 flex-grow flex flex-col">
+        <div className="pl-6 pr-10 pb-8 flex-grow flex flex-col overflow-hidden min-h-[250px]">
           <motion.div
-            className="glass-subtle rounded-2xl p-5 border border-white/5 flex-grow flex flex-col"
+            className="glass-subtle rounded-2xl p-6 border border-white/5 flex flex-col overflow-hidden h-full"
             variants={slideUpVariants}
           >
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <Sparkles className="h-4 w-4 text-blue-400" />
               <span className="text-white/80 text-xs font-semibold uppercase tracking-wider">
                 AI Analysis
               </span>
             </div>
-            <p className="text-white/70 text-sm leading-relaxed font-light">
-              {proposal.reason}
-            </p>
+            <div className="overflow-y-auto flex-grow">
+              <p className="text-white/70 text-sm leading-relaxed font-light">
+                {proposal.reason}
+              </p>
+            </div>
           </motion.div>
         </div>
-
-        {/* Notes Input */}
-        <AnimatePresence>
-          {canTakeAction && showDetails && (
-            <motion.div
-              className="pl-6 pr-10 pb-8"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <label
-                htmlFor={`notes-${proposal.id}`}
-                className="text-white/60 text-xs font-light uppercase tracking-wider mb-2 block"
-              >
-                Decision Notes (Optional)
-              </label>
-              <textarea
-                id={`notes-${proposal.id}`}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any notes about your decision..."
-                className="w-full px-4 py-3 glass-subtle text-white placeholder-white/30 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-white/20 border border-white/10"
-                rows={2}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Action Buttons */}
         <AnimatePresence>
