@@ -7,8 +7,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Osprey Trading Assistant',
-  description: 'AI-powered trading assistant with human approval',
+  title: 'Osprey',
 }
 
 export default function RootLayout({

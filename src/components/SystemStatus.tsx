@@ -181,7 +181,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
         <motion.div className="flex items-center justify-between mb-6" variants={staggerItem}>
           <div className="flex items-center gap-2">
             <h3 className="text-xl font-light tracking-wider text-neutral-100">
-              System Status
+              Osprey Status
             </h3>
           </div>
           <span className="text-xs text-white/40 font-light">
@@ -236,7 +236,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
           >
             <div className="flex items-center gap-2">
               <Wifi className="h-4 w-4 text-white/40" />
-              <span className="text-white/60 text-sm font-light">Streaming</span>
+              <span className="text-white/60 text-sm font-light">Trade Streaming</span>
             </div>
             <motion.div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getPillColor(health.websocket)} transition-colors duration-300`}
@@ -255,7 +255,7 @@ export function SystemStatus({ websocketStatus, className, compact = false }: Sy
           >
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-white/40" />
-              <span className="text-white/60 text-sm font-light">Market</span>
+              <span className="text-white/60 text-sm font-light">Market Hours</span>
             </div>
             <motion.div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${getPillColor(health.market)} transition-colors duration-300`}

@@ -72,14 +72,14 @@ export default function OrderHistory() {
       </CardHeader>
       <CardContent className="space-y-1">
         {/* Header - always show */}
-        <div className="grid grid-cols-7 gap-x-20 text-xs text-neutral-400 font-medium mb-3 pb-2 border-b border-neutral-700">
-          <div>Ticker</div>
-          <div>Action</div>
-          <div>Decision</div>
-          <div className="text-right">Price</div>
-          <div className="text-right">Quantity</div>
-          <div className="text-right">Total Value</div>
-          <div>Date</div>
+        <div className="grid grid-cols-7 text-xs text-neutral-400 font-medium border-b border-neutral-700">
+          <div className="px-3 py-2 border-r border-neutral-800">Ticker</div>
+          <div className="px-3 py-2 border-r border-neutral-800">Action</div>
+          <div className="px-3 py-2 border-r border-neutral-800">Decision</div>
+          <div className="px-3 py-2 text-right border-r border-neutral-800">Price</div>
+          <div className="px-3 py-2 text-right border-r border-neutral-800">Quantity</div>
+          <div className="px-3 py-2 text-right border-r border-neutral-800">Total Value</div>
+          <div className="px-3 py-2">Date</div>
         </div>
 
         {/* Content */}
@@ -91,14 +91,14 @@ export default function OrderHistory() {
           <div className="text-center py-8 text-neutral-400">No orders yet</div>
         ) : (
           <div className="max-h-[600px] overflow-y-auto scrollbar-thin">
-            <div className="space-y-1">
+            <div>
               {history.map((item) => (
                 <div
                   key={item.decision_id}
-                  className="grid grid-cols-7 gap-x-20 text-sm py-2 px-3 rounded hover:bg-neutral-700/30"
+                  className="grid grid-cols-7 text-sm border-b border-neutral-800 hover:bg-neutral-700/30"
                 >
-                  <div className="font-semibold text-neutral-100">{item.symbol}</div>
-                  <div>
+                  <div className="px-3 py-3 font-semibold text-neutral-100 border-r border-neutral-800">{item.symbol}</div>
+                  <div className="px-3 py-3 border-r border-neutral-800">
                     <Badge
                       variant="outline"
                       className={
@@ -110,7 +110,7 @@ export default function OrderHistory() {
                       {item.action.charAt(0) + item.action.slice(1).toLowerCase()}
                     </Badge>
                   </div>
-                  <div>
+                  <div className="px-3 py-3 border-r border-neutral-800">
                     <Badge
                       variant="outline"
                       className={
@@ -122,17 +122,17 @@ export default function OrderHistory() {
                       {item.decision.charAt(0) + item.decision.slice(1).toLowerCase()}
                     </Badge>
                   </div>
-                  <div className="text-right text-neutral-200">
+                  <div className="px-3 py-3 text-right text-neutral-200 border-r border-neutral-800">
                     ${item.price.toFixed(2)}
                   </div>
-                  <div className="text-right text-neutral-200">{item.quantity}</div>
-                  <div className="text-right text-neutral-200">
+                  <div className="px-3 py-3 text-right text-neutral-200 border-r border-neutral-800">{item.quantity}</div>
+                  <div className="px-3 py-3 text-right text-neutral-200 border-r border-neutral-800">
                     ${item.total_value.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2
                     })}
                   </div>
-                  <div className="text-neutral-300 text-xs">
+                  <div className="px-3 py-3 text-neutral-300 text-xs">
                     {new Date(item.decided_at).toLocaleString('en-US', {
                       month: 'short',
                       day: 'numeric',

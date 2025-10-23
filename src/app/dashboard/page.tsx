@@ -122,7 +122,7 @@ export default function Dashboard() {
           transition={{ duration: 0.5 }}
         >
           <div>
-            <h1 className="text-4xl font-light text-white tracking-tight">Trading Dashboard</h1>
+            <h1 className="text-4xl font-light text-white tracking-tight">Osprey Trading Dashboard</h1>
           </div>
           <div className="flex gap-3">
             <Button
