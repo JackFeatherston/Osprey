@@ -193,13 +193,13 @@ module.exports = {
         },
         // Glow effects
         '.glow-green': {
-          'box-shadow': '0 0 20px rgba(34, 197, 94, 0.3), 0 0 40px rgba(34, 197, 94, 0.1)',
+          'box-shadow': '0 0 8px rgba(34, 197, 94, 0.15), 0 0 16px rgba(34, 197, 94, 0.05)',
         },
         '.glow-red': {
-          'box-shadow': '0 0 20px rgba(239, 68, 68, 0.3), 0 0 40px rgba(239, 68, 68, 0.1)',
+          'box-shadow': '0 0 8px rgba(239, 68, 68, 0.15), 0 0 16px rgba(239, 68, 68, 0.05)',
         },
         '.glow-blue': {
-          'box-shadow': '0 0 20px rgba(59, 130, 246, 0.3), 0 0 40px rgba(59, 130, 246, 0.1)',
+          'box-shadow': '0 0 8px rgba(59, 130, 246, 0.15), 0 0 16px rgba(59, 130, 246, 0.05)',
         },
       })
     },

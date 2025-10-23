@@ -57,7 +57,7 @@ export default function TradeProposalDeck({ proposals, onApprove, onReject }: Tr
       <div className="relative flex items-start justify-start" style={{ minHeight: '600px' }}>
         {rotatedProposals.map((proposal, index) => {
           const isHovered = hoveredIndex === index
-          const offset = index * 50 // Stagger cards by 30px
+          const offset = index * 75 // Stagger cards by 30px
           const hoverOffset = isHovered ? -10 : 0
 
           return (
@@ -82,14 +82,14 @@ export default function TradeProposalDeck({ proposals, onApprove, onReject }: Tr
           )
         })}
 
-        {/* Play Button - much closer to cards */}
+        {/* Play Button - positioned to the right of the deck */}
         {rotatedProposals.length > 1 && (
           <button
             className={`absolute top-1/2 -translate-y-1/2 w-16 h-16 bg-white rounded-full flex items-center justify-center hover:scale-110 transition-transform shadow-lg z-[100] ${
               isRotating ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             style={{
-              left: `${rotatedProposals.length * 30 + 440}px`, // Position right after the last card
+              left: `${(rotatedProposals.length - 1) * 75 + 420 + 40}px`, // Position right after the last card
             }}
             onClick={handleNext}
             disabled={isRotating}
