@@ -52,16 +52,12 @@ export default function TradeProposalDeck({ proposals, onApprove, onReject }: Tr
 
   return (
     <div className="relative h-full">
-      {/* Title */}
-      <div className="mb-6">
-        <h2 className="text-4xl font-light text-white">Trade Proposals</h2>
-      </div>
 
       {/* Card Deck */}
       <div className="relative flex items-start justify-start" style={{ minHeight: '600px' }}>
         {rotatedProposals.map((proposal, index) => {
           const isHovered = hoveredIndex === index
-          const offset = index * 30 // Stagger cards by 30px
+          const offset = index * 50 // Stagger cards by 30px
           const hoverOffset = isHovered ? -10 : 0
 
           return (
