@@ -153,7 +153,7 @@ export default function Dashboard() {
 
         {/* Top Section - Trade Proposals Deck + Market Charts */}
         <motion.div
-          className="grid grid-cols-[1fr_550px] gap-8 mb-8"
+          className="grid grid-cols-[1fr_650px] gap-8 mb-8"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"

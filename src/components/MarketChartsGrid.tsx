@@ -21,7 +21,7 @@ export default function MarketChartsGrid({
       <CardContent className="space-y-2 h-[calc(100%-4rem)] overflow-y-auto">
         {symbols.map((symbol) => (
           <div key={symbol} className="w-full">
-            <CandlestickChart symbol={symbol} height={70} />
+            <CandlestickChart symbol={symbol} height={120} />
           </div>
         ))}
       </CardContent>
