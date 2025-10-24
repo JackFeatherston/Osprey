@@ -18,10 +18,12 @@ export default function Home() {
     }
   }, [user, loading, router])
 
+  // Show loading state while checking auth and redirecting
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between text-sm lg:flex">
-        <h1 className="text-4xl font-bold">Osprey Trading Assistant</h1>
+    <main className="flex min-h-screen flex-col items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        <p className="text-white/60">Loading...</p>
       </div>
     </main>
   )
