@@ -190,7 +190,7 @@ async def submit_decision(decision: TradeDecision):
             # Wrap trade execution in try-catch to handle failures gracefully
             try:
                 logger.info(f"Calling execute_trade for {proposal['symbol']} {proposal['action']} x{proposal['quantity']}")
-                execution_result = await market_analyzer.execute_trade(proposal)
+                execution_result = market_analyzer.execute_trade(proposal)
                 logger.info(f"execute_trade returned: {execution_result}")
 
                 if execution_result:
@@ -201,6 +201,21 @@ async def submit_decision(decision: TradeDecision):
                     })
                     execution_success = True
                     logger.info(f"Trade execution SUCCESSFUL for {proposal['symbol']}")
+
+                    # Broadcast execution log via WebSocket
+                    execution_log = {
+                        "proposal_id": proposal["id"],
+                        "symbol": proposal["symbol"],
+                        "action": proposal["action"],
+                        "quantity": proposal["quantity"],
+                        "status": "EXECUTED",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    await manager.broadcast({
+                        'type': 'trade_logs',
+                        'data': execution_log
+                    })
+                    logger.info(f"Broadcasted trade execution via WebSocket")
                 else:
                     await db.update_trade_execution(execution_record["id"], {
                         "execution_status": "REJECTED",

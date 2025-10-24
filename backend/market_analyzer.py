@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 from alpaca.data import StockHistoricalDataClient, StockBarsRequest, TimeFrame
 from alpaca.data.live import StockDataStream
+from alpaca.data.enums import DataFeed
 from alpaca.trading import TradingClient, MarketOrderRequest, OrderSide, TimeInForce
 import logging
 
@@ -48,8 +49,13 @@ class MarketAnalyzer:
         self.data_client = StockHistoricalDataClient(alpaca_api_key, alpaca_secret_key)
         self.trading_client = TradingClient(alpaca_api_key, alpaca_secret_key, paper=True)  # Paper trading
 
-        # Initialize WebSocket stream for real-time delayed bars (15-min delayed SIP feed)
-        self.stream_client = StockDataStream(alpaca_api_key, alpaca_secret_key)
+        # Initialize WebSocket stream for real-time IEX minute bars (free tier)
+        self.stream_client = StockDataStream(
+            alpaca_api_key,
+            alpaca_secret_key,
+            feed=DataFeed.IEX  # IEX feed for free tier accounts
+        )
+        logger.info("Initialized StockDataStream with IEX feed")
 
         # Initialize strategies
         from sentiment_trading_strategy import SentimentEnhancedStrategy
@@ -97,8 +103,8 @@ class MarketAnalyzer:
                 logger.info("Performing initial sentiment refresh...")
                 await strategy.refresh_daily_sentiment(self.watchlist)
 
-        # Subscribe to 15-minute bars for all watchlist symbols
-        logger.info(f"Subscribing to 15-minute bars for: {', '.join(self.watchlist)}")
+        # Subscribe to minute bars for all watchlist symbols
+        logger.info(f"Subscribing to minute bars for: {', '.join(self.watchlist)}")
         self.stream_client.subscribe_bars(self.handle_bar_update, *self.watchlist)
 
         # Create sentiment refresh task (checks every hour, refreshes if needed)
@@ -128,16 +134,16 @@ class MarketAnalyzer:
     
     async def fetch_intraday_bars(self, symbol: str, days: int = 7) -> Optional[pd.DataFrame]:
         """
-        Fetch 15-minute intraday bars for a symbol.
-        Returns last 7 days of 15-minute data (enough for technical analysis).
-        Free tier: Uses 15-minute delayed SIP data (most recent data available).
+        Fetch 1-minute intraday bars for a symbol.
+        Returns last 7 days of 1-minute data (enough for technical analysis).
+        Free tier: Uses real-time IEX data (1-minute bars).
         """
         end_date = datetime.now() - timedelta(minutes=15)
         start_date = end_date - timedelta(days=days)
 
         request_params = StockBarsRequest(
             symbol_or_symbols=[symbol],
-            timeframe=TimeFrame.Minute15,
+            timeframe=TimeFrame.Minute1,
             start=start_date,
             end=end_date
         )
@@ -145,20 +151,20 @@ class MarketAnalyzer:
         bars = self.data_client.get_stock_bars(request_params)
 
         if bars.df.empty:
-            logger.warning(f"No 15-minute bars available for {symbol}")
+            logger.warning(f"No 1-minute bars available for {symbol}")
             return None
 
         df = bars.df.reset_index()
         df = df[df['symbol'] == symbol].copy()
 
-        logger.info(f"Fetched {len(df)} 15-minute bars for {symbol}")
+        logger.info(f"Fetched {len(df)} 1-minute bars for {symbol}")
         return df
 
     async def analyze_symbol(self, symbol: str):
-        """Analyze a specific symbol using intraday 15-minute bars"""
+        """Analyze a specific symbol using intraday 1-minute bars"""
         logger.info(f"Analyzing symbol {symbol} with intraday data...")
 
-        # Fetch 15-minute intraday bars
+        # Fetch 1-minute intraday bars
         intraday_data = await self.fetch_intraday_bars(symbol)
 
         if intraday_data is None or len(intraday_data) < 20:
@@ -220,7 +226,7 @@ class MarketAnalyzer:
         """Get list of users receiving trade proposals"""
         return self.target_users.copy()
     
-    async def execute_trade(self, proposal: Dict) -> bool:
+    def execute_trade(self, proposal: Dict) -> bool:
         """Execute an approved trade"""
         logger.info(f"=== EXECUTING TRADE ===")
         logger.info(f"Symbol: {proposal['symbol']}, Action: {proposal['action']}, Qty: {proposal['quantity']}, Price: ${proposal['price']}")
@@ -239,25 +245,6 @@ class MarketAnalyzer:
         try:
             order = self.trading_client.submit_order(order_data=market_order_data)
             logger.info(f"Alpaca order submitted successfully! Order ID: {order.id}, Status: {order.status}")
-
-            execution_log = {
-                "proposal_id": proposal["id"],
-                "order_id": str(order.id),
-                "symbol": proposal["symbol"],
-                "action": proposal["action"],
-                "quantity": proposal["quantity"],
-                "status": "EXECUTED",
-                "timestamp": datetime.now().isoformat()
-            }
-
-            # Broadcast execution log via WebSocket
-            if self.websocket_manager:
-                await self.websocket_manager.broadcast({
-                    'type': 'trade_logs',
-                    'data': execution_log
-                })
-                logger.info(f"Broadcasted trade execution via WebSocket")
-
             logger.info(f"=== TRADE EXECUTION COMPLETE ===")
             return True
         except Exception as e:
