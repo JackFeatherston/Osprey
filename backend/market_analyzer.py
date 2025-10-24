@@ -12,10 +12,9 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 from alpaca.data import StockHistoricalDataClient, StockBarsRequest, TimeFrame
-from alpaca.data.live import StockDataStream
-from alpaca.data.enums import DataFeed
 from alpaca.trading import TradingClient, MarketOrderRequest, OrderSide, TimeInForce
 import logging
+import pytz
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,13 +48,9 @@ class MarketAnalyzer:
         self.data_client = StockHistoricalDataClient(alpaca_api_key, alpaca_secret_key)
         self.trading_client = TradingClient(alpaca_api_key, alpaca_secret_key, paper=True)  # Paper trading
 
-        # Initialize WebSocket stream for real-time IEX minute bars (free tier)
-        self.stream_client = StockDataStream(
-            alpaca_api_key,
-            alpaca_secret_key,
-            feed=DataFeed.IEX  # IEX feed for free tier accounts
-        )
-        logger.info("Initialized StockDataStream with IEX feed")
+        # Polling configuration (free tier compatible - no WebSocket bars)
+        self.polling_interval_seconds = 120  # Poll every 2 minutes (configurable)
+        logger.info("Using polling mode for market data (IEX free tier compatible)")
 
         # Initialize strategies
         from sentiment_trading_strategy import SentimentEnhancedStrategy
@@ -68,44 +63,35 @@ class MarketAnalyzer:
         
         self.is_running = False
 
-    async def handle_bar_update(self, bar):
+    def is_market_hours(self) -> bool:
         """
-        Handle incoming bar updates from WebSocket stream.
-        When a new 15-minute bar arrives, analyze the symbol.
+        Check if current time is during market hours (9:30 AM - 4:00 PM ET, Mon-Fri).
+        Returns True if market is open, False otherwise.
         """
-        symbol = bar.symbol
-        logger.info(f"Received bar update for {symbol} at {bar.timestamp}: close=${bar.close}")
+        et_tz = pytz.timezone('America/New_York')
+        now_et = datetime.now(et_tz)
 
-        # Fetch historical intraday data for analysis
-        # We need historical context, not just the single bar from WebSocket
-        intraday_data = await self.fetch_intraday_bars(symbol)
+        # Check if weekend
+        if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
+            return False
 
-        if intraday_data is None or len(intraday_data) < 20:
-            logger.warning(f"Insufficient historical data for {symbol} after bar update")
-            return
+        # Check if within market hours (9:30 AM - 4:00 PM ET)
+        market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
 
-        # Run strategy analysis on the updated data
-        for strategy in self.strategies:
-            signal = await strategy.analyze(intraday_data, symbol)
-            if signal:
-                logger.info(f"Generated trade signal for {symbol} from bar update: {signal}")
-                await self.generate_proposal(symbol, signal, strategy.name)
+        return market_open <= now_et <= market_close
 
     async def start(self):
-        """Start the market analyzer with WebSocket streaming"""
+        """Start the market analyzer with polling mode (free tier compatible)"""
         self.is_running = True
 
-        logger.info("Market analyzer starting...")
+        logger.info("Market analyzer starting in polling mode...")
 
         # Initial sentiment refresh on startup
         for strategy in self.strategies:
             if hasattr(strategy, 'refresh_daily_sentiment'):
                 logger.info("Performing initial sentiment refresh...")
                 await strategy.refresh_daily_sentiment(self.watchlist)
-
-        # Subscribe to minute bars for all watchlist symbols
-        logger.info(f"Subscribing to minute bars for: {', '.join(self.watchlist)}")
-        self.stream_client.subscribe_bars(self.handle_bar_update, *self.watchlist)
 
         # Create sentiment refresh task (checks every hour, refreshes if needed)
         async def sentiment_refresh_loop():
@@ -116,16 +102,44 @@ class MarketAnalyzer:
                         logger.info("Daily sentiment cache expired, refreshing...")
                         await strategy.refresh_daily_sentiment(self.watchlist)
 
-        # Run WebSocket stream and sentiment refresh concurrently
-        sentiment_task = asyncio.create_task(sentiment_refresh_loop())
+        # Create polling loop for market data
+        async def market_polling_loop():
+            """Poll for latest market data every N seconds during market hours"""
+            while self.is_running:
+                try:
+                    if self.is_market_hours():
+                        logger.info(f"Market is open - polling watchlist symbols...")
+                        # Analyze all watchlist symbols
+                        for symbol in self.watchlist:
+                            try:
+                                await self.analyze_symbol(symbol)
+                            except Exception as e:
+                                logger.error(f"Error analyzing {symbol}: {str(e)}")
+                    else:
+                        et_tz = pytz.timezone('America/New_York')
+                        now_et = datetime.now(et_tz)
+                        logger.info(f"Market is closed (current time: {now_et.strftime('%I:%M %p ET')} on {now_et.strftime('%A')}). Waiting...")
 
-        logger.info("Starting WebSocket stream (event-driven bar updates)...")
-        await self.stream_client.run()  # This runs until stopped
+                    # Wait before next poll
+                    await asyncio.sleep(self.polling_interval_seconds)
+
+                except Exception as e:
+                    logger.error(f"Error in polling loop: {str(e)}")
+                    await asyncio.sleep(60)  # Wait 1 minute on error before retry
+
+        # Run both tasks concurrently
+        sentiment_task = asyncio.create_task(sentiment_refresh_loop())
+        polling_task = asyncio.create_task(market_polling_loop())
+
+        logger.info(f"Market polling started (interval: {self.polling_interval_seconds}s, watchlist: {', '.join(self.watchlist)})")
+
+        # Keep running until stopped
+        await asyncio.gather(sentiment_task, polling_task, return_exceptions=True)
     
     def stop(self):
-        """Stop the market analyzer and WebSocket stream"""
+        """Stop the market analyzer polling loops"""
         self.is_running = False
-        self.stream_client.stop()
+        logger.info("Market analyzer stopped")
     
     async def analyze_markets(self):
         """Analyze market data for all watchlist symbols"""
@@ -143,7 +157,7 @@ class MarketAnalyzer:
 
         request_params = StockBarsRequest(
             symbol_or_symbols=[symbol],
-            timeframe=TimeFrame.Minute1,
+            timeframe=TimeFrame.Minute,
             start=start_date,
             end=end_date
         )
