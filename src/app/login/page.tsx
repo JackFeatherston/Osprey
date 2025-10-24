@@ -79,12 +79,9 @@ export default function LoginPage() {
         <Card variant="apple-card" className="overflow-hidden">
           <div className="p-8">
             <motion.div className="text-center mb-6" variants={slideUpVariants}>
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/30 mb-4">
-                <Lock className="h-4 w-4 text-blue-400" />
-                <span className="text-sm font-semibold text-blue-400">
-                  {isSignUp ? 'Create Account' : 'Sign In'}
-                </span>
-              </div>
+              <h2 className="text-2xl text-white font-light mb-4">
+                {isSignUp ? 'Create Account' : 'Sign In'}
+              </h2>
               <p className="text-white/60 text-sm font-light">
                 {isSignUp
                   ? 'Enter your details to create your account'
