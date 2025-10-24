@@ -62,7 +62,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center theme-midnight py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center theme-charcoal py-12 px-4 sm:px-6 lg:px-8">
       <motion.div
         className="max-w-md w-full"
         variants={scaleVariants}
@@ -178,7 +178,7 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  variant="gradient"
+                  variant="apple"
                   size="lg"
                   className="w-full"
                   disabled={loading}

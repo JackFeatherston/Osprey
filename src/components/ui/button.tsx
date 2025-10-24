@@ -26,6 +26,8 @@ const buttonVariants = cva(
           "glass-strong text-white shadow-xl hover:shadow-2xl",
         gradient:
           "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-purple-700",
+        apple:
+          "bg-blue-600 text-white shadow-sm hover:bg-blue-700 active:bg-blue-800",
         success:
           "bg-green-600 text-white shadow-lg hover:bg-green-700 hover:shadow-xl active:shadow-md glow-green",
         danger:
