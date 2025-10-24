@@ -7,6 +7,7 @@ Lightweight implementation optimized for EC2 free tier (1GB RAM).
 import asyncio
 import json
 import uuid
+import os
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -60,7 +61,14 @@ class MarketAnalyzer:
         
         # Watchlist of symbols to monitor
         self.watchlist = ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"]
-        
+
+        # Position sizing configuration
+        self.position_size_percent = float(os.getenv("POSITION_SIZE_PERCENT", "0.02"))  # 2% default
+        self.max_position_percent = float(os.getenv("MAX_POSITION_PERCENT", "0.10"))  # 10% max
+        self.min_portfolio_value = 100.0  # Minimum portfolio value to trade
+
+        logger.info(f"Position sizing: {self.position_size_percent*100}% per trade, max {self.max_position_percent*100}% per position")
+
         self.is_running = False
 
     def is_market_hours(self) -> bool:
@@ -80,6 +88,55 @@ class MarketAnalyzer:
         market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
 
         return market_open <= now_et <= market_close
+
+    def calculate_position_size(self, symbol: str, current_price: float) -> int:
+        """
+        Calculate position size based on portfolio percentage method.
+        Uses 2% of portfolio value per trade (configurable via POSITION_SIZE_PERCENT).
+
+        Args:
+            symbol: Stock symbol
+            current_price: Current stock price
+
+        Returns:
+            Number of shares to trade (whole shares only), 0 if unable to trade
+        """
+        # Fetch current account information
+        account = self.trading_client.get_account()
+        portfolio_value = float(account.portfolio_value)
+        buying_power = float(account.buying_power)
+
+        # Safety check: minimum portfolio value
+        if portfolio_value < self.min_portfolio_value:
+            logger.warning(f"Portfolio value ${portfolio_value:.2f} below minimum ${self.min_portfolio_value:.2f}, skipping trade")
+            return 0
+
+        # Calculate position size based on percentage of portfolio
+        position_value = portfolio_value * self.position_size_percent
+
+        # Apply maximum position cap
+        max_position_value = portfolio_value * self.max_position_percent
+        position_value = min(position_value, max_position_value)
+
+        # Calculate number of shares (round down to whole shares)
+        shares = int(position_value / current_price)
+
+        # Verify we have enough buying power
+        total_cost = shares * current_price
+        if total_cost > buying_power:
+            # Adjust down to fit buying power
+            shares = int(buying_power / current_price)
+            logger.warning(f"Adjusted position for {symbol}: insufficient buying power (${buying_power:.2f}), reduced to {shares} shares")
+
+        # Log the calculation
+        if shares > 0:
+            logger.info(f"Position sizing for {symbol}: portfolio=${portfolio_value:.2f}, "
+                      f"position={self.position_size_percent*100}% (${position_value:.2f}), "
+                      f"price=${current_price:.2f}, shares={shares}, cost=${shares*current_price:.2f}")
+        else:
+            logger.warning(f"Position sizing for {symbol}: calculated 0 shares (price too high or portfolio too small)")
+
+        return shares
 
     async def start(self):
         """Start the market analyzer with polling mode (free tier compatible)"""
@@ -196,19 +253,28 @@ class MarketAnalyzer:
     
     async def generate_proposal(self, symbol: str, signal: Dict, strategy_name: str):
         """Generate and store trade proposals for all target users"""
+        # Calculate position size dynamically based on portfolio value
+        quantity = self.calculate_position_size(symbol, signal["price"])
+
+        # Skip if quantity is 0 (insufficient funds or portfolio too small)
+        if quantity == 0:
+            logger.info(f"Skipping proposal for {symbol}: position size calculated as 0 shares")
+            return
+
         for user_id in self.target_users:
             proposal_data = {
                 "id": str(uuid.uuid4()),
                 "symbol": symbol,
                 "action": signal["action"],
-                "quantity": signal["quantity"],
+                "quantity": quantity,
                 "price": signal["price"],
                 "reason": f"[{strategy_name}] {signal['reason']}",
                 "strategy": strategy_name,
                 "user_id": user_id,
-                "status": "PENDING"
+                "status": "PENDING",
+                "timestamp": datetime.now().isoformat()
             }
-            
+
             await self._store_proposal(proposal_data)
     
     

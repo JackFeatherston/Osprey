@@ -305,8 +305,7 @@ class SentimentEnhancedStrategy(TradingStrategy):
         
         # Determine action based on thresholds
         action = None
-        quantity = 10  # Default quantity
-        
+
         # If no news data available, use technical analysis only
         if sentiment_summary.get("article_count", 0) == 0:
             logger.info(f"Using technical analysis only for {symbol}")
@@ -352,7 +351,6 @@ class SentimentEnhancedStrategy(TradingStrategy):
         return {
             "action": action,
             "price": current_price,
-            "quantity": quantity,
             "reason": reasoning,
             "sentiment_score": sentiment_score,
             "technical_score": technical_score,
@@ -391,7 +389,6 @@ class SentimentEnhancedStrategy(TradingStrategy):
         Conflicts → No signal
         """
         action = None
-        quantity = 10
 
         # BUY signal: BULLISH sentiment confirmed by positive technical score
         if sentiment_bias == "BULLISH" and technical_score > 0.01:
@@ -421,7 +418,6 @@ class SentimentEnhancedStrategy(TradingStrategy):
         return {
             "action": action,
             "price": current_price,
-            "quantity": quantity,
             "reason": reasoning,
             "sentiment_score": sentiment_score,
             "sentiment_bias": sentiment_bias,
@@ -440,23 +436,29 @@ class SentimentEnhancedStrategy(TradingStrategy):
 
         # Sentiment component
         sentiment_strength = "strong" if abs(sentiment_score) > 0.5 else "moderate"
-        sentiment_text = f"{sentiment_strength} {sentiment_bias} sentiment ({sentiment_score:+.2f})"
-
-        # Technical component
         price_direction = "rising" if technical_score > 0 else "falling"
         price_change_pct = abs(price_trend["short_term_change"]) * 100
 
-        technical_text = f"intraday price {price_direction} {price_change_pct:.1f}%"
+        # Build natural, readable reasoning with clear sections
+        parts = []
 
+        # Opening statement with sentiment analysis
+        momentum_direction = "upward" if action == "BUY" else "downward"
+        parts.append(f"{sentiment_strength.capitalize()} {sentiment_bias.lower()} sentiment (score: {sentiment_score:+.2f}) suggests {momentum_direction} momentum.")
+
+        # Technical confirmation with details
+        tech_detail = f"intraday price {price_direction} {price_change_pct:.1f}%"
         if volume_signal["is_volume_spike"]:
-            technical_text += f", volume spike {volume_signal['volume_ratio']:.1f}x"
+            tech_detail += f" with volume spike of {volume_signal['volume_ratio']:.1f}x average"
 
-        # Combined reasoning
-        full_reason = f"[{action}] {sentiment_text} confirmed by {technical_text} (technical score: {technical_score:+.2f})"
+        parts.append(f"\n\nTechnical analysis confirms this with {tech_detail}.")
 
-        return full_reason
+        # Technical score summary
+        parts.append(f"\n\nTechnical score: {technical_score:+.2f}")
 
-    async def _generate_reasoning(self, 
+        return "".join(parts)
+
+    async def _generate_reasoning(self,
                                 symbol: str,
                                 action: str,
                                 sentiment_score: float,
@@ -466,25 +468,32 @@ class SentimentEnhancedStrategy(TradingStrategy):
                                 technical_score: float,
                                 combined_score: float) -> str:
         """Generate human-readable reasoning for the trade decision"""
-        
-        # Sentiment reasoning
-        sentiment_text = "POSITIVE" if sentiment_score > 0 else "NEGATIVE" if sentiment_score < 0 else "NEUTRAL"
+
+        # Sentiment analysis
+        sentiment_text = "positive" if sentiment_score > 0 else "negative" if sentiment_score < 0 else "neutral"
         sentiment_strength = "strong" if abs(sentiment_score) > 0.5 else "moderate" if abs(sentiment_score) > 0.2 else "weak"
-        
-        sentiment_reason = f"News sentiment: {sentiment_strength} {sentiment_text} ({sentiment_score:+.2f}) from {sentiment_summary['article_count']} articles"
-        
-        # Technical reasoning
+
+        # Technical indicators
         price_direction = "rising" if price_trend["short_term_change"] > 0 else "falling"
         price_change_pct = abs(price_trend["short_term_change"]) * 100
-        
-        technical_reason = f"Technical: price {price_direction} {price_change_pct:.1f}% recently"
-        
-        if volume_signal["is_volume_spike"]:
-            technical_reason += f", volume spike {volume_signal['volume_ratio']:.1f}x average"
-        
-        # Combined reasoning
         signal_strength = "strong" if abs(combined_score) > 0.4 else "moderate"
-        
-        full_reason = f"[{signal_strength.upper()} {action}] {sentiment_reason} | {technical_reason} | Combined score: {combined_score:+.2f}"
-        
-        return full_reason
+
+        # Build natural, readable reasoning with clear sections
+        parts = []
+
+        # News sentiment analysis
+        article_text = "article" if sentiment_summary['article_count'] == 1 else "articles"
+        parts.append(f"News analysis shows {sentiment_strength} {sentiment_text} sentiment (score: {sentiment_score:+.2f}) based on {sentiment_summary['article_count']} recent {article_text}.")
+
+        # Technical analysis
+        tech_detail = f"price {price_direction} {price_change_pct:.1f}% recently"
+        if volume_signal["is_volume_spike"]:
+            tech_detail += f" with volume spike of {volume_signal['volume_ratio']:.1f}x average"
+
+        parts.append(f"\n\nTechnical indicators show {tech_detail}.")
+
+        # Combined assessment
+        momentum_direction = "upward" if action == "BUY" else "downward"
+        parts.append(f"\n\nCombined analysis indicates {signal_strength} {momentum_direction} momentum (combined score: {combined_score:+.2f}).")
+
+        return "".join(parts)

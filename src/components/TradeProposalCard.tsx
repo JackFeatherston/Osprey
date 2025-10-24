@@ -125,8 +125,7 @@ export default function TradeProposalCard({
             </motion.div>
           </div>
             <div className="flex items-center gap-3 text-white/60">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-sm font-light">{proposal.strategy} Strategy</span>
+              <span className="text-sm font-light">Sentiment Enhanced Strategy</span>
               <span className="text-sm">•</span>
               <span className="text-sm font-light">{formatDateTime(proposal.timestamp)}</span>
             </div>
@@ -178,9 +177,8 @@ export default function TradeProposalCard({
             variants={slideUpVariants}
           >
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="h-4 w-4 text-blue-400" />
               <span className="text-white/80 text-xs font-semibold uppercase tracking-wider">
-                AI Analysis
+                Market Analysis
               </span>
             </div>
             <div className="overflow-y-auto flex-grow">
