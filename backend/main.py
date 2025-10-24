@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from market_analyzer import initialize_ai_engine, get_ai_engine
 from supabase_client import get_supabase_client, SupabaseClient
-from auth_middleware import get_current_user, require_auth, get_user_id
+from auth_middleware import get_current_user, require_auth, get_user_id, verify_jwt_token
 import uuid
 from datetime import datetime, timedelta
 import threading
@@ -430,7 +430,24 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
     await manager.connect(websocket)
     logger.info("WebSocket connection accepted")
 
-    user_id = "d6c02463-eb2d-4d5a-9ba3-cc97d20910b3"
+    # Authenticate user via token
+    user_id = None
+    if token:
+        try:
+            user_data = await verify_jwt_token(token)
+            if user_data:
+                user_id = user_data.get("sub")
+                logger.info(f"WebSocket authenticated user: {user_id}")
+        except Exception as e:
+            logger.error(f"WebSocket auth failed: {e}")
+
+    # Close connection if authentication failed
+    if not user_id:
+        logger.warning("WebSocket connection rejected - no valid authentication token")
+        await websocket.close(code=1008, reason="Authentication required")
+        manager.disconnect(websocket)
+        return
+
     market_analyzer = get_ai_engine()
 
     if market_analyzer:

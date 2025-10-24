@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, AccountInfo, OrderHistoryItem, DashboardStats, AIStatus } from '@/lib/api';
+import { api, AccountInfo, OrderHistoryItem, DashboardStats, AIStatus, getAuthToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Core hook for trade proposals - matches CLAUDE.md workflow
@@ -40,8 +40,16 @@ export function useTradeProposals() {
       return;
     }
 
-    const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws') + '/ws';
-    console.log('[WebSocket] Attempting to connect to:', wsUrl);
+    // Get auth token for WebSocket authentication
+    const authToken = getAuthToken();
+    if (!authToken) {
+      console.log('[WebSocket] Skipping connection: no auth token available');
+      return;
+    }
+
+    const baseWsUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/^http/, 'ws');
+    const wsUrl = `${baseWsUrl}/ws?token=${encodeURIComponent(authToken)}`;
+    console.log('[WebSocket] Attempting to connect to:', baseWsUrl + '/ws');
     setConnectionStatus('connecting');
     const ws = new WebSocket(wsUrl);
 
