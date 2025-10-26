@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Github, Loader2, Sparkles, Lock } from 'lucide-react'
+import { Github, Loader2 } from 'lucide-react'
 import { scaleVariants, slideUpVariants } from '@/lib/animations'
 
 export default function LoginPage() {

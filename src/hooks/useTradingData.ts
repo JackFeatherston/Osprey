@@ -171,18 +171,12 @@ export function useTradeProposals() {
     }
   }, [fetchProposals]);
 
-  // Clear error
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
   return {
     proposals,
     loading,
     error,
     submitDecision,
     clearProposals,
-    clearError,
     refetch: fetchProposals,
     connectionStatus,
   };
@@ -205,25 +199,6 @@ export function useAccountInfo() {
   }, []);
 
   return { account, loading, error };
-}
-
-// Hook for dashboard stats
-export function useDashboardStats() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.getDashboardStats()
-      .then(setStats)
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to fetch stats');
-        console.error(err);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  return { stats, loading, error, refetch: () => {} };
 }
 
 // Hook for AI status

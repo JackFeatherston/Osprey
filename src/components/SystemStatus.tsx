@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '@/lib/api';
-import { Wifi, Loader2, TrendingUp, Activity, Database, Zap } from 'lucide-react';
+import { Wifi, Loader2, TrendingUp, Database, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { staggerContainer, staggerItem } from '@/lib/animations';
 
