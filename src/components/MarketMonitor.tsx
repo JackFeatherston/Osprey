@@ -2,9 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
-import { Eye } from 'lucide-react'
 import Image from 'next/image'
-import { staggerContainer, staggerItem } from '@/lib/animations'
 
 interface MarketMonitorProps {
   watchlist?: string[]
@@ -28,12 +26,12 @@ export default function MarketMonitor({ watchlist, className }: MarketMonitorPro
     <Card variant="glass-panel" animated hover className={`h-full ${className}`}>
       <motion.div
         className="p-6"
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
       >
         {/* Header */}
-        <motion.div className="flex items-center justify-between mb-6" variants={staggerItem}>
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-light tracking-wider text-neutral-100">
               Currently Monitoring
@@ -42,14 +40,13 @@ export default function MarketMonitor({ watchlist, className }: MarketMonitorPro
           <div className="text-xs text-white/40 font-light">
             {stocks.length} symbols
           </div>
-        </motion.div>
+        </div>
 
         {/* Stocks Grid */}
-        <motion.div className="grid grid-cols-1 gap-3" variants={staggerContainer}>
+        <div className="grid grid-cols-1 gap-3">
           {stocks.map((symbol, index) => (
             <motion.div
               key={symbol}
-              variants={staggerItem}
               whileHover={{ scale: 1.02, x: 4 }}
               whileTap={{ scale: 0.98 }}
               className="glass-subtle rounded-xl p-4 cursor-pointer transition-all duration-200 border border-white/5 hover:border-white/10"
@@ -83,7 +80,7 @@ export default function MarketMonitor({ watchlist, className }: MarketMonitorPro
               </div>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       </motion.div>
     </Card>
   )
