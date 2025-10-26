@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, AccountInfo, OrderHistoryItem, DashboardStats, AIStatus, getAuthToken } from '@/lib/api';
+import { api, AccountInfo, OrderHistoryItem, AIStatus, getAuthToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Core hook for trade proposals - matches CLAUDE.md workflow
@@ -252,14 +252,12 @@ export function useDashboard() {
   const proposals = useTradeProposals();
   const account = useAccountInfo();
   const activity = useRecentActivity();
-  const stats = useDashboardStats();
   const ai = useAIStatus();
 
   return {
     proposals,
     account,
     activity,
-    stats,
     ai,
     connectionStatus: proposals.connectionStatus,
   };
