@@ -79,12 +79,10 @@ async def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
 
 async def get_user_id(authorization: Optional[str] = Header(None)) -> str:
     """
-    Get user ID from authorization header or return consistent development UUID
+    Get user ID from authorization header
+    Raises HTTPException if user is not authenticated
     """
     user = await get_current_user(authorization)
-    if user:
-        return user["id"]
-    
-    # For development/testing, return a consistent UUID
-    # In production, this should require authentication
-    return "d6c02463-eb2d-4d5a-9ba3-cc97d20910b3"
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user["id"]
