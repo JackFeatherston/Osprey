@@ -1,106 +1,90 @@
-# Osprey Trading Assistant
+# Osprey
 
-A complete human-in-the-loop algorithmic trading system that analyzes market data using technical indicators and news sentiment, proposes trades, and executes them only with your approval. Built with Next.js, FastAPI, Supabase, and WebSockets for real-time trading decisions.
+A complete human-in-the-loop algorithmic trading system that analyzes market data using technical indicators and news sentiment, proposes trades, and executes them only with your approval. Built with Next.js, FastAPI, Supabase (PostgreSQL), and WebSockets for real-time trading decisions.
+
+image of whole dashboard.
 
 ## Features
 
-### Complete Trading Workflow
-- **Technical Market Analysis**: 100-day historical price/volume analysis with trend detection and momentum signals
-- **News Sentiment Analysis**: Real-time financial news fetching via NewsAPI with VADER sentiment scoring
-- **Sentiment-Enhanced Strategy**: Combines news sentiment (60%) with technical indicators (40%) for trade signals
-- **Trade Proposals**: System generates trade recommendations with detailed reasoning showing sentiment + technical factors
-- **Human Approval**: All trades require explicit user approval before execution
-- **Live Execution**: Integrates with Alpaca API for paper and live trading
-- **Full Audit Trail**: Complete history of all proposals, decisions, and executions
+Multimodal Market Analysis
+- Classic **trading algorithms** such as simple moving averages (SMA) used to analyze real-time market data
+- **Sentiment analysis** of recent news articles
+- Scoring system that combines stock market analysis with recent news article analyis to generate a well informed trade proposal
 
-### Real-time Dashboard
-- **Live Updates**: WebSocket-powered real-time proposal notifications
-- **Portfolio Tracking**: Real-time portfolio value and trading statistics
-- **Market Analyzer Control**: Start/stop market analysis with one click
-- **System Health**: Comprehensive system status monitoring
 
-### Secure & Scalable
-- **User Authentication**: Supabase Auth with email/password and OAuth
-- **Database Security**: Row-level security ensuring data isolation
-- **Paper Trading**: Safe testing environment with Alpaca paper trading
-- **Docker Ready**: Complete containerization for easy deployment
+Trading Dashboard
+- Websockets used to update the user's dashboard with live stock market data and trade proposals
+- Trade proposals with Buy/Sell recommendations included with **reasoning** for making the trade
+- User **stock portfolio** displayed with portfolio value, cash, and buying power
+- **Order history** displaying all proposals, decisions, and executions
 
-## Architecture & File Interactions
+Secure & Scalable
+- **User authentication** through Supabase allowing for signing in with Google, GitHub, or email
+- Database designed with **row level security** 
+- All trade executions are done through **paper trading** for demo purposes
+- **Containerized** application for development and possible deployment
 
-### System Flow
+## Tech Stack
+Frontend
+- Next.js
+- React
+- Tailwind CSS
+- Shadcn
 
+Backend
+- FastAPI
+- Num.py & Pandas
+- Supabase/PostgreSQL database
+- Alpaca API (for trading)
+- NewsAPI (for fetching daily news articles)
+- VADER Sentiment (for extracting financial sentiment from news articles)
+- Docker
+
+## PostgreSQL Database Schema
+
+The system uses 4 main tables:
+
+- **`trade_proposals`**: Trade recommendations based on stock market and news article analysis
+- **`trade_decisions`**: User approve/reject decisions  
+- **`trade_executions`**: Actual trade execution records
+- **`market_data`**: Cached market data
+
+## Application Workflow
+
+lucid workflow here
+
+**System Requirements**
+- Docker & Docker Compose
+- Node.js 18+
+
+**Setup**
+1. Clone the Repository and navigate to the project
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         market_analyzer.py                       │
-│  • Fetches 100-day historical market data from Alpaca           │
-│  • Coordinates analysis every 60 seconds                        │
-│  • Manages watchlist of symbols (AAPL, GOOGL, MSFT, etc.)      │
-│  • Broadcasts proposals via WebSocket                           │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-                      ├──► sentiment_trading_strategy.py
-                      │    • Receives historical price/volume data
-                      │    • Orchestrates sentiment + technical analysis
-                      │    • Generates BUY/SELL signals
-                      │
-                      ├──► news_fetcher.py
-                      │    • Fetches recent financial news from NewsAPI
-                      │    • Caches articles (30min TTL)
-                      │    • Rate limits API requests
-                      │
-                      └──► vader_sentiment_analyzer.py
-                           • Uses VADER sentiment analysis (rule-based)
-                           • Analyzes sentiment of news articles
-                           • Returns scores: -1 (negative) to +1 (positive)
-                           • Optimized for financial keywords and context
+git clone <repository-url>
+```
+```
+cd osprey
+```
+2. Build the Docker containers
+```
+docker-compose up --build
+```
+3. Navigate to the application
+```
+http://localhost:3000
 ```
 
-### Backend File Responsibilities
+## Usage
+- After logging in, every minute the application will generate a Trade Proposal card based on market and news analysis 
+- If you accept the Buy/Sell recommendation, the trade order will be executed and the Trade Proposal card will disappear
+- If you reject the Trade Proposal, the proposal will simply go away
+- All decisions are logged and displayed immediately in the Order History 
 
-#### **`main.py`** - FastAPI Application
-- HTTP endpoints for proposals, decisions, and system control
-- WebSocket server for real-time updates
-- Initializes and manages the market analyzer lifecycle
-- Handles user authentication via Supabase
 
-#### **`market_analyzer.py`** - Analysis Coordinator
-- **Data Fetching**: Retrieves 100 days of OHLCV data from Alpaca API
-- **Strategy Execution**: Runs sentiment-enhanced strategy on each symbol
-- **Proposal Generation**: Creates trade proposals and stores in Supabase
-- **WebSocket Broadcasting**: Sends proposals to connected clients
-- **Trade Execution**: Submits approved orders to Alpaca
 
-#### **`sentiment_trading_strategy.py`** - Main Strategy Logic
-- **Technical Analysis** (40% weight):
-  - Price trend calculation (5-day and 20-day changes)
-  - Simple moving average (10-day SMA)
-  - Volume analysis and spike detection
-- **Sentiment Analysis** (60% weight):
-  - Fetches news articles via `news_fetcher.py`
-  - Gets sentiment scores via `vader_sentiment_analyzer.py`
-  - Requires minimum 2 articles for sentiment signals
-- **Signal Generation**: Combines both analyses to produce BUY/SELL signals
-- **Reasoning**: Generates human-readable explanations for decisions
 
-#### **`news_fetcher.py`** - News Data Provider
-- **API Integration**: Queries NewsAPI for recent financial articles
-- **Caching**: 30-minute TTL to reduce API calls and costs
-- **Rate Limiting**: 1-second delay between requests
-- **Article Parsing**: Extracts title, description, URL, and metadata
 
-#### **`vader_sentiment_analyzer.py`** - Sentiment Scorer
-- **Rule-based Analysis**: Uses VADER (Valence Aware Dictionary and sEntiment Reasoner)
-- **Financial Context**: Enhanced with financial keyword boosters and context adjustments
-- **Text Analysis**: Processes article titles + descriptions
-- **Sentiment Scoring**: Returns positive/negative/neutral labels with confidence
-- **Aggregation**: Calculates weighted average sentiment across multiple articles
-- **Caching**: LRU cache for repeated text analysis
-- **Memory Efficient**: Lightweight alternative to transformer models, ideal for 1GB RAM constraint
 
-#### **`supabase_client.py`** - Database Layer
-- CRUD operations for proposals, decisions, and executions
-- User authentication and authorization
-- Row-level security enforcement
 
 ### Data Flow Example
 
@@ -136,140 +120,6 @@ A complete human-in-the-loop algorithmic trading system that analyzes market dat
 10. Frontend displays proposal with full reasoning to user
 ```
 
-## Quick Start
-
-### Prerequisites
-- Node.js 18+
-- Docker & Docker Compose
-- Supabase account
-- Alpaca trading account (paper trading)
-
-### 1. Clone and Setup
-```bash
-git clone <repository-url>
-cd osprey
-cp .env.example .env.local
-```
-
-### 2. Configure Environment
-Edit `.env.local` with your credentials:
-```env
-# Frontend
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-
-# Backend  
-SUPABASE_URL=your-supabase-url
-SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
-
-# Trading
-ALPACA_API_KEY=your-alpaca-api-key
-ALPACA_SECRET_KEY=your-alpaca-secret-key
-```
-
-### 3. Setup Database
-1. Create a new Supabase project
-2. Run the SQL schema from `supabase/schema.sql` in your Supabase SQL editor
-3. Verify all tables and policies are created
-
-### 4. Start Services
-```bash
-docker-compose up --build
-```
-
-### 5. Access Application
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-
-### Project Structure
-```
-osprey/
-├── src/                    # Frontend (Next.js)
-│   ├── app/               # App router pages
-│   ├── components/        # React components
-│   ├── hooks/            # Custom hooks
-│   └── lib/              # Utilities and API client
-├── backend/               # Backend (FastAPI)
-│   ├── main.py           # FastAPI application & WebSocket server
-│   ├── market_analyzer.py # Coordinates analysis & fetches 100-day market data
-│   ├── sentiment_trading_strategy.py # Combines sentiment + technical analysis
-│   ├── news_fetcher.py   # Fetches financial news from NewsAPI
-│   ├── vader_sentiment_analyzer.py # VADER sentiment analysis with financial context
-│   └── supabase_client.py # Database operations
-├── supabase/             # Database schema
-└── docker-compose.yml    # Development environment
-```
-
-### Key Technologies
-- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend**: FastAPI, Python 3.11, asyncio
-- **Database**: Supabase (PostgreSQL) with Row Level Security
-- **Real-time**: WebSockets
-- **Trading**: Alpaca API with paper trading support
-- **News Data**: NewsAPI for financial news articles
-- **Sentiment Analysis**: VADER (vaderSentiment) with financial keyword enhancements
-- **Market Data**: 100-day historical price/volume from Alpaca
-- **Deployment**: Docker containers
-
-### Development Commands
-```bash
-# Start development environment
-docker-compose up --build
-
-# View logs
-docker-compose logs backend
-docker-compose logs frontend
-
-# Run tests
-npm test                    # Frontend tests
-pytest backend/            # Backend tests
-
-# Database migrations
-# (Apply schema changes via Supabase dashboard)
-```
-
-## Testing
-
-See [TESTING.md](./TESTING.md) for comprehensive testing instructions covering:
-- End-to-end workflow testing
-- Real-time functionality verification  
-- Database integration testing
-- Error handling validation
-- Performance testing
-
-### Quick Test
-```bash
-# 1. Ensure all services are running
-docker-compose ps
-
-# 2. Test API health
-curl http://localhost:8000/health
-
-# 3. Create test user and verify dashboard
-# (Open http://localhost:3000 and sign up)
-
-# 4. Start market analyzer and wait for proposals
-# (Use dashboard controls)
-```
 
 
-## Database Schema
 
-The system uses 5 main tables:
-
-- **`trade_proposals`**: AI-generated trade recommendations
-- **`trade_decisions`**: User approve/reject decisions  
-- **`trade_executions`**: Actual trade execution records
-- **`market_data`**: Cached market data
-
-All tables include Row Level Security for multi-user isolation.
-
-## Security Features
-
-- **Authentication**: JWT-based auth via Supabase
-- **Authorization**: Row-level security policies
-- **API Security**: Bearer token validation
-- **Data Isolation**: Users only access their own data
-- **Paper Trading**: Safe testing environment
-- **Error Boundaries**: Graceful failure handling
