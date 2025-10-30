@@ -51,7 +51,7 @@ The system uses 4 main tables:
 
 ## Application Workflow
 
-lucid workflow here
+<img width="1862" height="1374" alt="Image" src="https://github.com/user-attachments/assets/d078b6a3-dc80-4fb5-86d1-af7751032b0f" />
 
 **System Requirements**
 - Docker & Docker Compose
