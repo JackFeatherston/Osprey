@@ -1,18 +1,17 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, useSpring, useTransform } from 'framer-motion'
 import { api, AccountInfo } from '@/lib/api'
 import { Card } from '@/components/ui/card'
-import { DollarSign, Wallet, TrendingUp, AlertCircle, Loader2, Sparkles } from 'lucide-react'
-import { staggerContainer, staggerItem, numberVariants } from '@/lib/animations'
+import { AlertCircle, Loader2 } from 'lucide-react'
+import { staggerContainer, staggerItem } from '@/lib/animations'
 
 interface BuyingPowerProps {
   className?: string
 }
 
 function AnimatedNumber({ value }: { value: number }) {
-  const ref = useRef<HTMLSpanElement>(null)
   const motionValue = useSpring(0, { stiffness: 100, damping: 30, mass: 1 })
   const rounded = useTransform(motionValue, (latest) =>
     new Intl.NumberFormat('en-US', {

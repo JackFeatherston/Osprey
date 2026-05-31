@@ -1,33 +1,32 @@
-/**
- * Apple Card-inspired Trade Proposal Component
- * Features: Glassmorphism, bold typography, smooth animations
- */
-
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TradeProposal } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   TrendingUp,
   TrendingDown,
-  Clock,
   AlertCircle,
   CheckCircle,
   XCircle,
-  ChevronRight,
-  Sparkles,
-  Loader2
+  Loader2,
 } from 'lucide-react';
 import { glassCardVariants, slideUpVariants, staggerContainer, staggerItem } from '@/lib/animations';
 
 interface TradeProposalCardProps {
   proposal: TradeProposal;
-  onApprove?: (proposalId: string, notes?: string) => Promise<void>;
-  onReject?: (proposalId: string, notes?: string) => Promise<void>;
+  onApprove?: (proposalId: string) => Promise<void>;
+  onReject?: (proposalId: string) => Promise<void>;
   disabled?: boolean;
-  compact?: boolean;
+}
+
+function formatDateTime(dateString: string) {
+  return new Date(dateString).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function TradeProposalCard({
@@ -35,14 +34,11 @@ export default function TradeProposalCard({
   onApprove,
   onReject,
   disabled = false,
-  compact = false
 }: TradeProposalCardProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showDetails, setShowDetails] = useState(!compact);
 
   const handleApprove = async () => {
     if (!onApprove || isProcessing) return;
-
     setIsProcessing(true);
     await onApprove(proposal.id);
     setIsProcessing(false);
@@ -50,29 +46,13 @@ export default function TradeProposalCard({
 
   const handleReject = async () => {
     if (!onReject || isProcessing) return;
-
     setIsProcessing(true);
     await onReject(proposal.id);
     setIsProcessing(false);
   };
 
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const isExpired = () => {
-    if (!proposal.expires_at) return false;
-    return new Date(proposal.expires_at) < new Date();
-  };
-
-  const canTakeAction = proposal.status === 'PENDING' && !isExpired() && !disabled && !isProcessing;
+  const isExpired = proposal.expires_at ? new Date(proposal.expires_at) < new Date() : false;
+  const canTakeAction = proposal.status === 'PENDING' && !isExpired && !disabled && !isProcessing;
 
   const isBuy = proposal.action === 'BUY';
   const actionColor = isBuy ? 'text-green-500' : 'text-red-500';
@@ -84,46 +64,33 @@ export default function TradeProposalCard({
     <motion.div
       variants={glassCardVariants}
       initial="rest"
-      whileHover={canTakeAction ? "hover" : undefined}
+      whileHover={canTakeAction ? 'hover' : undefined}
       className="relative"
       style={{ height: '720px' }}
     >
       <Card
         variant="apple-card"
-        className={`relative overflow-hidden flex flex-col ${
-          isExpired() ? 'opacity-60' : ''
-        } ${
+        className={`relative overflow-hidden flex flex-col ${isExpired ? 'opacity-60' : ''} ${
           isBuy ? 'border-l-4 border-l-green-500/50' : 'border-l-4 border-l-red-500/50'
         }`}
         style={{ height: '720px' }}
       >
-        {/* Header Section */}
         <div className="pl-6 pr-10 pt-10 pb-8">
-
-          {/* Symbol - Hero Typography */}
-          <motion.div
-            className="mb-4"
-            variants={staggerItem}
-          >
-            <h2 className="text-6xl font-bold tracking-tighter text-white mb-2">
-              {proposal.symbol}
-            </h2>
+          <motion.div className="mb-4" variants={staggerItem}>
+            <h2 className="text-6xl font-bold tracking-tighter text-white mb-2">{proposal.symbol}</h2>
             <div className="flex items-start justify-between mb-8">
-            {/* Action Badge */}
-            <motion.div
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-2xl ${actionBg} border ${actionBorder}`}
-              variants={slideUpVariants}
-            >
-              {isBuy ? (
-                <TrendingUp className={`h-5 w-5 ${actionColor}`} />
-              ) : (
-                <TrendingDown className={`h-5 w-5 ${actionColor}`} />
-              )}
-              <span className={`font-bold text-sm ${actionColor}`}>
-                {proposal.action}
-              </span>
-            </motion.div>
-          </div>
+              <motion.div
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-2xl ${actionBg} border ${actionBorder}`}
+                variants={slideUpVariants}
+              >
+                {isBuy ? (
+                  <TrendingUp className={`h-5 w-5 ${actionColor}`} />
+                ) : (
+                  <TrendingDown className={`h-5 w-5 ${actionColor}`} />
+                )}
+                <span className={`font-bold text-sm ${actionColor}`}>{proposal.action}</span>
+              </motion.div>
+            </div>
             <div className="flex items-center gap-3 text-white/60">
               <span className="text-sm font-light">Sentiment Enhanced Strategy</span>
               <span className="text-sm">•</span>
@@ -131,7 +98,6 @@ export default function TradeProposalCard({
             </div>
           </motion.div>
 
-          {/* Trade Metrics - Bold Data */}
           <motion.div
             className="grid grid-cols-3 gap-6 mt-10"
             variants={staggerContainer}
@@ -139,9 +105,7 @@ export default function TradeProposalCard({
             animate="visible"
           >
             <motion.div variants={staggerItem}>
-              <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">
-                Quantity
-              </div>
+              <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">Quantity</div>
               <div className="text-white text-3xl font-bold tracking-tight">
                 {proposal.quantity.toLocaleString()}
               </div>
@@ -149,19 +113,13 @@ export default function TradeProposalCard({
             </motion.div>
 
             <motion.div variants={staggerItem}>
-              <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">
-                Price
-              </div>
-              <div className="text-white text-3xl font-bold tracking-tight">
-                ${proposal.price.toFixed(2)}
-              </div>
+              <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">Price</div>
+              <div className="text-white text-3xl font-bold tracking-tight">${proposal.price.toFixed(2)}</div>
               <div className="text-white/60 text-sm mt-0.5">per share</div>
             </motion.div>
 
             <motion.div variants={staggerItem}>
-              <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">
-                Total Value
-              </div>
+              <div className="text-white/40 text-xs font-light uppercase tracking-wider mb-1">Total Value</div>
               <div className="text-white text-3xl font-bold tracking-tight">
                 ${totalValue.toLocaleString()}
               </div>
@@ -170,26 +128,20 @@ export default function TradeProposalCard({
           </motion.div>
         </div>
 
-        {/* AI Analysis Section */}
         <div className="pl-6 pr-10 pb-8 flex-grow flex flex-col overflow-hidden min-h-[250px]">
           <motion.div
             className="glass-subtle rounded-2xl p-6 border border-white/5 flex flex-col overflow-hidden h-full"
             variants={slideUpVariants}
           >
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-white/80 text-xs font-semibold uppercase tracking-wider">
-                Market Analysis
-              </span>
+              <span className="text-white/80 text-xs font-semibold uppercase tracking-wider">Market Analysis</span>
             </div>
             <div className="overflow-y-auto flex-grow">
-              <p className="text-white/70 text-sm leading-relaxed font-light">
-                {proposal.reason}
-              </p>
+              <p className="text-white/70 text-sm leading-relaxed font-light">{proposal.reason}</p>
             </div>
           </motion.div>
         </div>
 
-        {/* Action Buttons */}
         <AnimatePresence>
           {canTakeAction && (
             <motion.div
@@ -198,28 +150,11 @@ export default function TradeProposalCard({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
             >
-              <Button
-                onClick={handleApprove}
-                disabled={isProcessing}
-                variant="success"
-                size="lg"
-                className="flex-1"
-              >
-                {isProcessing ? (
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                ) : (
-                  <CheckCircle className="h-5 w-5 mr-2" />
-                )}
+              <Button onClick={handleApprove} disabled={isProcessing} variant="success" size="lg" className="flex-1">
+                {isProcessing ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <CheckCircle className="h-5 w-5 mr-2" />}
                 {isProcessing ? 'Processing...' : 'Approve'}
               </Button>
-
-              <Button
-                onClick={handleReject}
-                disabled={isProcessing}
-                variant="danger"
-                size="lg"
-                className="flex-1"
-              >
+              <Button onClick={handleReject} disabled={isProcessing} variant="danger" size="lg" className="flex-1">
                 <XCircle className="h-5 w-5 mr-2" />
                 {isProcessing ? 'Processing...' : 'Reject'}
               </Button>
@@ -227,7 +162,6 @@ export default function TradeProposalCard({
           )}
         </AnimatePresence>
 
-        {/* Status Messages */}
         <AnimatePresence>
           {proposal.status !== 'PENDING' && (
             <motion.div
@@ -249,9 +183,8 @@ export default function TradeProposalCard({
           )}
         </AnimatePresence>
 
-        {/* Expiration Warning */}
         <AnimatePresence>
-          {isExpired() && proposal.status === 'PENDING' && (
+          {isExpired && proposal.status === 'PENDING' && (
             <motion.div
               className="ml-6 mr-10 mb-10 p-4 rounded-2xl bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 text-center text-sm flex items-center justify-center gap-2"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -263,20 +196,6 @@ export default function TradeProposalCard({
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Expand/Collapse for Compact Mode */}
-        {compact && (
-          <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="absolute top-4 right-4 p-2 glass-subtle rounded-full hover:bg-white/10 transition-colors"
-          >
-            <ChevronRight
-              className={`h-5 w-5 text-white/60 transition-transform ${
-                showDetails ? 'rotate-90' : ''
-              }`}
-            />
-          </button>
-        )}
       </Card>
     </motion.div>
   );

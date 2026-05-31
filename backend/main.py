@@ -1,87 +1,46 @@
-from fastapi import FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Depends
+import asyncio
+import json
+import logging
+import os
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from typing import List, Optional, Set
+
+import uvicorn
+from alpaca.data import TimeFrame
+from alpaca.data.requests import StockBarsRequest, StockLatestQuoteRequest
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Set, Dict, Any
-import json
-import uvicorn
-import asyncio
-import os
-import logging
-from contextlib import asynccontextmanager
-from dotenv import load_dotenv
-from market_analyzer import initialize_ai_engine, get_ai_engine
-from supabase_client import get_supabase_client, SupabaseClient
-from auth_middleware import get_current_user, require_auth, get_user_id, verify_jwt_token
-import uuid
-from datetime import datetime, timedelta
-import threading
-from alpaca.data import TimeFrame
-from alpaca.data.requests import StockBarsRequest
 
-# Load environment variables
+from auth_middleware import get_user_id, verify_jwt_token
+from market_analyzer import get_market_analyzer, initialize_market_analyzer
+from supabase_client import get_supabase_client
+
 load_dotenv()
-
-# Setup logger
 logger = logging.getLogger(__name__)
 
-# Lifespan manager for market analyzer
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    alpaca_api_key = os.getenv("ALPACA_API_KEY")
-    alpaca_secret_key = os.getenv("ALPACA_SECRET_KEY")
 
-    if alpaca_api_key and alpaca_secret_key:
-        market_analyzer = initialize_ai_engine(alpaca_api_key, alpaca_secret_key, db, manager)
-        analyzer_task = asyncio.create_task(market_analyzer.start())
-        app.state.market_analyzer = market_analyzer
-        app.state.analyzer_task = analyzer_task
-
-    yield
-
-    # Shutdown
-    if hasattr(app.state, 'analyzer_task'):
-        market_analyzer = get_ai_engine()
-        if market_analyzer:
-            market_analyzer.stop()
-        app.state.analyzer_task.cancel()
-        try:
-            await app.state.analyzer_task
-        except asyncio.CancelledError:
-            pass
-
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# Data models
 class TradeProposal(BaseModel):
     id: str
     symbol: str
-    action: str  # "BUY" or "SELL"
+    action: str
     quantity: int
     price: float
     reason: str
     timestamp: Optional[str] = None
     created_at: Optional[str] = None
 
+
 class TradeDecision(BaseModel):
     proposal_id: str
-    decision: str  # "APPROVED" or "REJECTED"
+    decision: str
     user_id: Optional[str] = None
     notes: Optional[str] = None
 
-# Initialize Supabase client
-db = get_supabase_client()
 
-# WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Set[WebSocket] = set()
@@ -94,380 +53,303 @@ class ConnectionManager:
         self.active_connections.discard(websocket)
 
     async def broadcast(self, message: dict):
-        """Broadcast message to all connected clients, auto-remove dead connections"""
-        dead_connections = set()
+        dead = set()
         for connection in list(self.active_connections):
             try:
                 await connection.send_text(json.dumps(message))
-            except:
-                dead_connections.add(connection)
+            except Exception:
+                dead.add(connection)
+        self.active_connections -= dead
 
-        # Clean up dead connections
-        self.active_connections -= dead_connections
 
+db = get_supabase_client()
 manager = ConnectionManager()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    alpaca_key = os.getenv("ALPACA_API_KEY")
+    alpaca_secret = os.getenv("ALPACA_SECRET_KEY")
+
+    if alpaca_key and alpaca_secret:
+        analyzer = initialize_market_analyzer(alpaca_key, alpaca_secret, db, manager)
+        app.state.analyzer_task = asyncio.create_task(analyzer.start())
+
+    yield
+
+    analyzer = get_market_analyzer()
+    if analyzer:
+        analyzer.stop()
+    if hasattr(app.state, "analyzer_task"):
+        app.state.analyzer_task.cancel()
+        try:
+            await app.state.analyzer_task
+        except asyncio.CancelledError:
+            pass
+
+
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
 async def root():
     return {"message": "Trading Assistant API", "status": "running"}
 
+
 @app.get("/health")
 async def health_check():
     return {
         "status": "healthy",
         "websocket_connections": len(manager.active_connections),
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
+
 
 @app.get("/proposals", response_model=List[TradeProposal])
 async def get_proposals(user_id: str = Depends(get_user_id)):
-    proposals = await db.get_trade_proposals(user_id=user_id, status="PENDING")
-    return proposals
+    return await db.get_trade_proposals(user_id=user_id, status="PENDING")
+
 
 @app.post("/proposals")
 async def create_proposal(proposal: TradeProposal, user_id: str = Depends(get_user_id)):
-    # Convert proposal to dict and add required fields
-    proposal_data = proposal.dict()
-    if 'id' not in proposal_data or not proposal_data['id']:
-        proposal_data['id'] = str(uuid.uuid4())
-    
-    proposal_data['user_id'] = user_id
-    
-    # Create proposal in database
-    created_proposal = await db.create_trade_proposal(proposal_data)
-    
-    # Broadcast directly via WebSocket
-    await manager.broadcast({
-        'type': 'trade_proposals',
-        'data': created_proposal
-    })
-    
-    return {"status": "proposal created", "id": created_proposal['id']}
+    data = proposal.dict()
+    data["id"] = data.get("id") or str(uuid.uuid4())
+    data["user_id"] = user_id
+
+    created = await db.create_trade_proposal(data)
+    await manager.broadcast({"type": "trade_proposals", "data": created})
+    return {"status": "proposal created", "id": created["id"]}
+
 
 @app.post("/decisions")
 async def submit_decision(decision: TradeDecision):
-    logger.info(f"Received decision: {decision.decision} for proposal {decision.proposal_id}")
-
     proposal = await db.get_trade_proposal(decision.proposal_id)
-
     if not proposal:
-        logger.error(f"Proposal {decision.proposal_id} not found")
         raise HTTPException(status_code=404, detail=f"Proposal {decision.proposal_id} not found")
 
-    logger.info(f"Processing {decision.decision} decision for {proposal['symbol']} {proposal['action']} x{proposal['quantity']}")
-
-    decision_data = {
+    await db.create_trade_decision({
         "proposal_id": decision.proposal_id,
         "user_id": proposal["user_id"],
         "decision": decision.decision,
-        "notes": getattr(decision, 'notes', None)
-    }
+        "notes": decision.notes,
+    })
 
-    # Always log the decision first, regardless of execution outcome
-    created_decision = await db.create_trade_decision(decision_data)
-    logger.info(f"Decision recorded in database: {created_decision['id']}")
+    if decision.decision != "APPROVED":
+        return {"status": "decision recorded", "decision": decision.decision}
 
-    execution_success = False
-    execution_error = None
+    analyzer = get_market_analyzer()
+    if not analyzer:
+        return {"status": "decision recorded", "decision": decision.decision, "executed": False, "error": "Market analyzer not available"}
 
-    if decision.decision == "APPROVED":
-        logger.info(f"Decision approved - initiating trade execution for {proposal['symbol']}")
-        market_analyzer = get_ai_engine()
-        if market_analyzer:
-            execution_data = {
-                "proposal_id": decision.proposal_id,
-                "user_id": proposal["user_id"],
-                "symbol": proposal["symbol"],
-                "action": proposal["action"],
-                "quantity": proposal["quantity"],
-                "execution_status": "PENDING"
-            }
+    execution = await db.create_trade_execution({
+        "proposal_id": decision.proposal_id,
+        "user_id": proposal["user_id"],
+        "symbol": proposal["symbol"],
+        "action": proposal["action"],
+        "quantity": proposal["quantity"],
+        "execution_status": "PENDING",
+    })
 
-            execution_record = await db.create_trade_execution(execution_data)
-            logger.info(f"Created execution record: {execution_record['id']}")
+    try:
+        analyzer.execute_trade(proposal)
+    except Exception as e:
+        await db.update_trade_execution(execution["id"], {
+            "execution_status": "REJECTED",
+            "error_message": str(e),
+        })
+        return {"status": "decision recorded", "decision": decision.decision, "executed": False, "error": str(e)}
 
-            # Wrap trade execution in try-catch to handle failures gracefully
-            try:
-                logger.info(f"Calling execute_trade for {proposal['symbol']} {proposal['action']} x{proposal['quantity']}")
-                execution_result = market_analyzer.execute_trade(proposal)
-                logger.info(f"execute_trade returned: {execution_result}")
+    await db.update_trade_execution(execution["id"], {
+        "execution_status": "FILLED",
+        "executed_price": proposal["price"],
+        "executed_at": datetime.now().isoformat(),
+    })
+    await manager.broadcast({
+        "type": "trade_logs",
+        "data": {
+            "proposal_id": proposal["id"],
+            "symbol": proposal["symbol"],
+            "action": proposal["action"],
+            "quantity": proposal["quantity"],
+            "status": "EXECUTED",
+            "timestamp": datetime.now().isoformat(),
+        },
+    })
+    return {"status": "decision recorded", "decision": decision.decision, "executed": True}
 
-                if execution_result:
-                    await db.update_trade_execution(execution_record["id"], {
-                        "execution_status": "FILLED",
-                        "executed_price": proposal["price"],
-                        "executed_at": datetime.now().isoformat()
-                    })
-                    execution_success = True
-                    logger.info(f"Trade execution SUCCESSFUL for {proposal['symbol']}")
-
-                    # Broadcast execution log via WebSocket
-                    execution_log = {
-                        "proposal_id": proposal["id"],
-                        "symbol": proposal["symbol"],
-                        "action": proposal["action"],
-                        "quantity": proposal["quantity"],
-                        "status": "EXECUTED",
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    await manager.broadcast({
-                        'type': 'trade_logs',
-                        'data': execution_log
-                    })
-                    logger.info(f"Broadcasted trade execution via WebSocket")
-                else:
-                    await db.update_trade_execution(execution_record["id"], {
-                        "execution_status": "REJECTED",
-                        "error_message": "Trade execution returned false"
-                    })
-                    execution_error = "Trade execution failed"
-                    logger.warning(f"Trade execution returned False for {proposal['symbol']}")
-            except Exception as e:
-                # Log the error and update execution record
-                error_msg = str(e)
-                logger.error(f"Trade execution FAILED with exception: {error_msg}", exc_info=True)
-                await db.update_trade_execution(execution_record["id"], {
-                    "execution_status": "REJECTED",
-                    "error_message": error_msg
-                })
-                execution_error = error_msg
-        else:
-            execution_error = "Market analyzer not available"
-            logger.error("Market analyzer not available - cannot execute trade")
-
-    result = {"status": "decision recorded", "decision": decision.decision}
-    if decision.decision == "APPROVED":
-        result["executed"] = execution_success
-        if execution_error:
-            result["error"] = execution_error
-
-    logger.info(f"Returning result: {result}")
-    return result
 
 @app.get("/decisions")
 async def get_decisions(user_id: str = Depends(get_user_id)):
-    decisions = await db.get_trade_decisions(user_id)
-    return decisions
+    return await db.get_trade_decisions(user_id)
+
 
 @app.get("/ai-status")
 async def get_ai_status():
-    """Get market analyzer status (kept as /ai-status for frontend compatibility)"""
-    market_analyzer = get_ai_engine()
-    if market_analyzer:
-        return {
-            "status": "running" if market_analyzer.is_running else "stopped",
-            "watchlist": market_analyzer.watchlist,
-            "strategies": [strategy.name for strategy in market_analyzer.strategies]
-        }
-    return {"status": "not initialized"}
+    analyzer = get_market_analyzer()
+    if not analyzer:
+        return {"status": "not initialized"}
+    return {
+        "status": "running" if analyzer.is_running else "stopped",
+        "watchlist": analyzer.watchlist,
+        "strategies": [s.name for s in analyzer.strategies],
+    }
+
 
 @app.get("/dashboard-stats")
 async def get_dashboard_stats(user_id: str = Depends(get_user_id)):
-    """Get dashboard statistics for the user"""
-    active_proposals = await db.get_active_proposals(user_id)
-    portfolio_summary = await db.get_user_portfolio_summary(user_id)
+    active = await db.get_active_proposals(user_id)
+    summary = await db.get_user_portfolio_summary(user_id)
     executions = await db.get_trade_executions(user_id)
-    
-    today_executions = [
-        ex for ex in executions 
-        if ex.get('executed_at') and ex['executed_at'].startswith(datetime.now().strftime('%Y-%m-%d'))
-    ]
-    
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_executions = [e for e in executions if e.get("executed_at", "").startswith(today)]
+
     return {
-        "active_proposals": len(active_proposals),
+        "active_proposals": len(active),
         "executed_trades_today": len(today_executions),
-        "total_trades": portfolio_summary.get("total_trades", 0),
-        "total_trade_volume": float(portfolio_summary.get("total_trade_volume", 0)),
-        "buy_trades": portfolio_summary.get("buy_trades", 0),
-        "sell_trades": portfolio_summary.get("sell_trades", 0)
+        "total_trades": summary.get("total_trades", 0),
+        "total_trade_volume": float(summary.get("total_trade_volume", 0)),
+        "buy_trades": summary.get("buy_trades", 0),
+        "sell_trades": summary.get("sell_trades", 0),
     }
+
 
 @app.get("/order-history")
 async def get_order_history(user_id: str = Depends(get_user_id)):
-    """Get complete order history - all trade decisions with proposal details"""
-    history = await db.get_order_history(user_id)
-    return history
+    return await db.get_order_history(user_id)
+
 
 @app.get("/account")
 async def get_account_info():
-    """Get Alpaca account information"""
-    market_analyzer = get_ai_engine()
-    account = market_analyzer.trading_client.get_account()
+    analyzer = get_market_analyzer()
+    account = analyzer.trading_client.get_account()
     return {
         "account_id": account.id,
         "buying_power": float(account.buying_power),
         "cash": float(account.cash),
         "portfolio_value": float(account.portfolio_value),
-        "status": account.status
+        "status": account.status,
     }
+
 
 @app.delete("/proposals/clear")
 async def clear_user_proposals(user_id: str = Depends(get_user_id)):
-    """Clear all pending proposals for the user"""
-    cleared_count = await db.clear_pending_proposals(user_id)
-    return {"status": "proposals cleared", "count": cleared_count}
+    count = await db.clear_pending_proposals(user_id)
+    return {"status": "proposals cleared", "count": count}
+
+
+def _build_orderbook_levels(bid_price: float, ask_price: float, bid_size: int, ask_size: int, depth: int = 6):
+    # Validate: ask must be greater than bid and spread under 10%; otherwise synthesize a tight ask.
+    if ask_price <= bid_price or (ask_price - bid_price) / bid_price > 0.10:
+        ask_price = bid_price * 1.0001
+        if ask_size == 0:
+            ask_size = bid_size
+
+    increment = max(bid_price * 0.0005, 0.01)
+    bids, asks = [], []
+    for i in range(depth):
+        bp = round(bid_price - i * increment, 2)
+        bq = bid_size + i * 2
+        bids.append({"price": bp, "quantity": bq, "total": round(bp * bq, 2)})
+
+        ap = round(ask_price + i * increment, 2)
+        aq = ask_size + i * 2
+        asks.append({"price": ap, "quantity": aq, "total": round(ap * aq, 2)})
+    return bids, asks
+
 
 @app.get("/orderbook")
 async def get_orderbook(symbol: str = "AAPL"):
-    """Get order book data for a symbol from Alpaca"""
-    try:
-        market_analyzer = get_ai_engine()
-        if not market_analyzer:
-            raise HTTPException(status_code=503, detail="Market analyzer not available")
+    analyzer = get_market_analyzer()
+    if not analyzer:
+        raise HTTPException(status_code=503, detail="Market analyzer not available")
 
-        # Get latest quote for the symbol
-        from alpaca.data.requests import StockLatestQuoteRequest
-        request = StockLatestQuoteRequest(symbol_or_symbols=symbol)
-        quote = market_analyzer.data_client.get_stock_latest_quote(request)
+    quotes = analyzer.data_client.get_stock_latest_quote(StockLatestQuoteRequest(symbol_or_symbols=symbol))
+    if symbol not in quotes:
+        raise HTTPException(status_code=404, detail=f"Quote not found for symbol {symbol}")
 
-        if symbol in quote:
-            latest = quote[symbol]
-            bid_price = float(latest.bid_price) if latest.bid_price else 0.0
-            ask_price = float(latest.ask_price) if latest.ask_price else 0.0
-            bid_size = int(latest.bid_size) if latest.bid_size else 0
-            ask_size = int(latest.ask_size) if latest.ask_size else 0
+    quote = quotes[symbol]
+    bids, asks = _build_orderbook_levels(
+        bid_price=float(quote.bid_price or 0),
+        ask_price=float(quote.ask_price or 0),
+        bid_size=int(quote.bid_size or 0),
+        ask_size=int(quote.ask_size or 0),
+    )
+    return {"symbol": symbol, "bids": bids, "asks": asks}
 
-            # Validate ask/bid prices - ask should be greater than bid
-            # and spread should be reasonable (< 10%)
-            if ask_price <= bid_price or (ask_price - bid_price) / bid_price > 0.10:
-                logger.warning(f"Invalid ask/bid prices for {symbol}: bid=${bid_price}, ask=${ask_price}. Calculating synthetic ask.")
-                # Calculate synthetic ask with 0.01% spread
-                ask_price = bid_price * 1.0001
-                if ask_size == 0:
-                    ask_size = bid_size
-
-            # Generate order book levels around the current bid/ask
-            # Use 0.05% of price per level for realistic spread
-            price_increment = max(bid_price * 0.0005, 0.01)  # At least 1 cent
-            bids = []
-            asks = []
-
-            for i in range(6):
-                bid_level_price = bid_price - (i * price_increment)
-                bid_quantity = bid_size + (i * 2)
-                bids.append({
-                    "price": round(bid_level_price, 2),
-                    "quantity": bid_quantity,
-                    "total": round(bid_level_price * bid_quantity, 2)
-                })
-
-                ask_level_price = ask_price + (i * price_increment)
-                ask_quantity = ask_size + (i * 2)
-                asks.append({
-                    "price": round(ask_level_price, 2),
-                    "quantity": ask_quantity,
-                    "total": round(ask_level_price * ask_quantity, 2)
-                })
-
-            return {
-                "symbol": symbol,
-                "bids": bids,
-                "asks": asks
-            }
-        else:
-            raise HTTPException(status_code=404, detail=f"Quote not found for symbol {symbol}")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching order book: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch order book: {str(e)}")
 
 @app.get("/bars/{symbol}")
 async def get_bars(symbol: str, days: int = 30):
-    """Get historical candlestick bar data for a symbol"""
-    try:
-        market_analyzer = get_ai_engine()
-        if not market_analyzer:
-            raise HTTPException(status_code=503, detail="Market analyzer not available")
+    analyzer = get_market_analyzer()
+    if not analyzer:
+        raise HTTPException(status_code=503, detail="Market analyzer not available")
 
-        # Get historical data - use delayed data (1 day ago) to avoid SIP restrictions
-        end_date = datetime.now() - timedelta(days=1)
-        start_date = end_date - timedelta(days=days)
+    # Delayed data (1 day ago) avoids SIP restrictions on free tier.
+    end_date = datetime.now() - timedelta(days=1)
+    start_date = end_date - timedelta(days=days)
 
-        request_params = StockBarsRequest(
-            symbol_or_symbols=[symbol],
-            timeframe=TimeFrame.Day,
-            start=start_date,
-            end=end_date
-        )
+    bars = analyzer.data_client.get_stock_bars(StockBarsRequest(
+        symbol_or_symbols=[symbol],
+        timeframe=TimeFrame.Day,
+        start=start_date,
+        end=end_date,
+    ))
 
-        bars = market_analyzer.data_client.get_stock_bars(request_params)
+    if bars.df.empty:
+        return {"symbol": symbol, "bars": []}
 
-        if bars.df.empty:
-            return {"symbol": symbol, "bars": []}
+    df = bars.df.reset_index()
+    df = df[df["symbol"] == symbol]
 
-        df = bars.df.reset_index()
-        df = df[df['symbol'] == symbol].copy()
+    return {
+        "symbol": symbol,
+        "bars": [
+            {
+                "time": row["timestamp"].isoformat(),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": int(row["volume"]),
+            }
+            for _, row in df.iterrows()
+        ],
+    }
 
-        # Convert to list of dicts for JSON response
-        bar_data = []
-        for _, row in df.iterrows():
-            bar_data.append({
-                "time": row['timestamp'].isoformat(),
-                "open": float(row['open']),
-                "high": float(row['high']),
-                "low": float(row['low']),
-                "close": float(row['close']),
-                "volume": int(row['volume'])
-            })
-
-        return {
-            "symbol": symbol,
-            "bars": bar_data
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching bars for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch bars: {str(e)}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
-    """WebSocket endpoint with user authentication and proposal targeting"""
     await manager.connect(websocket)
-    logger.info("WebSocket connection accepted")
 
-    # Authenticate user via token
-    user_id = None
-    if token:
-        try:
-            user_data = await verify_jwt_token(token)
-            if user_data:
-                user_id = user_data.get("sub")
-                logger.info(f"WebSocket authenticated user: {user_id}")
-        except Exception as e:
-            logger.error(f"WebSocket auth failed: {e}")
+    user_data = await verify_jwt_token(token) if token else None
+    user_id = user_data.get("sub") if user_data else None
 
-    # Close connection if authentication failed
     if not user_id:
-        logger.warning("WebSocket connection rejected - no valid authentication token")
         await websocket.close(code=1008, reason="Authentication required")
         manager.disconnect(websocket)
         return
 
-    market_analyzer = get_ai_engine()
-
-    if market_analyzer:
-        market_analyzer.add_target_user(user_id)
-        logger.info(f"User {user_id} registered for proposals. Target users: {market_analyzer.get_target_users()}")
-    else:
-        logger.error("Market analyzer not available!")
+    analyzer = get_market_analyzer()
+    if analyzer:
+        analyzer.add_target_user(user_id)
 
     try:
-        # Keep connection alive without blocking
-        # The client only receives messages, never sends them
         while True:
-            await asyncio.sleep(1)  # Keep connection alive with periodic sleep
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for user {user_id}")
+        pass
     finally:
-        if market_analyzer:
-            market_analyzer.remove_target_user(user_id)
-            logger.info(f"User {user_id} unregistered from proposals")
+        if analyzer:
+            analyzer.remove_target_user(user_id)
         manager.disconnect(websocket)
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

@@ -88,8 +88,8 @@ export default function Dashboard() {
           <motion.div className="min-h-[700px]" variants={staggerItem}>
             <TradeProposalDeck
               proposals={dashboard.proposals.proposals}
-              onApprove={(id, notes) => dashboard.proposals.submitDecision(id, 'APPROVED', notes)}
-              onReject={(id, notes) => dashboard.proposals.submitDecision(id, 'REJECTED', notes)}
+              onApprove={(id) => dashboard.proposals.submitDecision(id, 'APPROVED')}
+              onReject={(id) => dashboard.proposals.submitDecision(id, 'REJECTED')}
             />
           </motion.div>
 
