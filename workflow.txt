@@ -1,0 +1,99 @@
+ ---
+  After Login — End-to-End Workflow
+  
+  1. Backend Startup (happens once, server-side)
+
+  When the FastAPI server boots, it immediately spins up the
+  MarketAnalyzer as a background task. It runs two concurrent
+  loops:
+
+  - Sentiment refresh loop — fetches recent news articles for
+  each watchlist symbol (AAPL, GOOGL, MSFT, TSLA, NVDA) from
+  NewsAPI, runs them through VADER sentiment analysis, and caches
+   a BULLISH / BEARISH / NEUTRAL bias per symbol. This refreshes
+  every 24 hours.
+  - Market polling loop — every 2 minutes during market hours
+  (9:30am–4pm ET), fetches intraday price bars from Alpaca for
+  each symbol and runs the strategy.
+
+  ---
+  2. User Logs In (Frontend)
+
+  - The user authenticates via Supabase Auth (email/password).
+  - The frontend stores a JWT token and redirects to /dashboard.
+
+  ---
+  3. Dashboard Loads
+
+  The dashboard makes several REST calls to populate the UI:
+
+  - /proposals — fetches any pending trade proposals already in
+  the database
+  - /dashboard-stats — active proposal count, trades executed
+  today, total volume
+  - /account — Alpaca paper account balance, buying power,
+  portfolio value
+  - /order-history — past executed/rejected trades from Supabase
+  - /bars/{symbol} — 30-day price bars for candlestick charts
+  - /orderbook?symbol=... — live bid/ask levels
+
+  Then the frontend opens a WebSocket connection to /ws (passing
+  the JWT token). The backend registers the user's ID as a
+  "target user" — meaning the AI engine will now generate
+  proposals addressed to them.
+
+  ---
+  4. AI Engine Generates a Proposal (Backend)
+
+  On the next 2-minute polling tick, for each watchlist symbol:
+
+  1. Fetches ~7 days of intraday minute-level bars from Alpaca.
+  2. Checks the cached sentiment bias for that symbol.
+  3. If sentiment is NEUTRAL, skips — no trade.
+  4. If BULLISH or BEARISH, computes a technical score from:
+    - Short-term price change (20-bar)
+    - Medium-term price change (80-bar)
+    - Price vs. 40-bar SMA
+    - Volume spike detection
+  5. If sentiment and technicals agree (e.g., BULLISH + positive
+  technical score), it generates a BUY signal (or SELL for
+  bearish).
+  6. Calculates position size: 2% of portfolio value, capped at
+  buying power.
+  7. Writes the proposal to Supabase and broadcasts it over 
+  WebSocket to all connected users.
+
+  ---
+  5. User Sees the Proposal (Frontend)
+
+  The WebSocket message arrives in real time. The dashboard shows
+   a trade proposal card with:
+  - Symbol, action (BUY/SELL), quantity, price
+  - AI reasoning (sentiment score, technical details)
+  - Approve and Reject buttons
+
+  ---
+  6. User Makes a Decision
+
+  If Rejected:
+  - Frontend posts POST /decisions with decision: "REJECTED".
+  - Backend logs the decision to Supabase. Nothing else happens.
+
+  If Approved:
+  - Frontend posts POST /decisions with decision: "APPROVED".
+  - Backend creates a PENDING execution record in Supabase.
+  - Backend calls the Alpaca paper trading API to submit a market
+   order.
+  - On success, the execution record is updated to FILLED with
+  the executed price and timestamp.
+  - Backend broadcasts a trade_logs WebSocket message — the
+  dashboard's order history updates in real time.
+
+  ---
+  7. Ongoing
+  
+  - The AI engine keeps running every 2 minutes, generating new
+  proposals as market conditions shift.
+  - The sentiment cache refreshes once per day.
+  - All proposals, decisions, and executions are persisted to
+  Supabase for auditing and history views.
