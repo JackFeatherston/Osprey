@@ -12,15 +12,14 @@ logger = logging.getLogger(__name__)
 
 # Supabase configuration for auth verification
 supabase_url = os.getenv("SUPABASE_URL")
-supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET", "your-jwt-secret")
+supabase_secret_key = os.getenv("SUPABASE_SECRET_KEY")
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[Dict[str, Any]]:
     """
     Extract and verify user from Authorization header
     Returns user info if token is valid, None otherwise
     """
-    if not authorization or not supabase_url or not supabase_service_key:
+    if not authorization or not supabase_url or not supabase_secret_key:
         return None
 
     if not authorization.startswith("Bearer "):
@@ -28,12 +27,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Optio
 
     token = authorization[7:]
 
-    decoded_token = jwt.decode(
-        token,
-        supabase_jwt_secret,
-        algorithms=["HS256"],
-        options={"verify_signature": False}
-    )
+    decoded_token = jwt.decode(token, options={"verify_signature": False})
 
     user_id = decoded_token.get("sub")
     if not user_id:
@@ -59,12 +53,7 @@ async def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
     """
     Verify JWT token and return user info
     """
-    decoded_token = jwt.decode(
-        token,
-        supabase_jwt_secret,
-        algorithms=["HS256"],
-        options={"verify_signature": False}
-    )
+    decoded_token = jwt.decode(token, options={"verify_signature": False})
 
     user_id = decoded_token.get("sub")
     if not user_id:

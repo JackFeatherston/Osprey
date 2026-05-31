@@ -17,10 +17,10 @@ class SupabaseClient:
     def __init__(self):
         """Initialize Supabase client with async HTTP"""
         self.supabase_url = os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        self.supabase_key = os.getenv("SUPABASE_SECRET_KEY")
 
         if not self.supabase_url or not self.supabase_key:
-            raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
+            raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY must be set")
 
         # Remove trailing slash if present
         self.supabase_url = self.supabase_url.rstrip('/')
