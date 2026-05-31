@@ -1,21 +1,46 @@
 'use client'
 
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
-import Image from 'next/image'
 
 interface MarketMonitorProps {
   watchlist?: string[]
   className?: string
 }
 
-// Mapping of ticker symbols to company domains for logo fetching
-const tickerToLogo: Record<string, string> = {
+const tickerToDomain: Record<string, string> = {
   'AAPL': 'apple.com',
   'GOOGL': 'google.com',
   'TSLA': 'tesla.com',
   'NVDA': 'nvidia.com',
   'MSFT': 'microsoft.com',
+}
+
+function StockLogo({ symbol }: { symbol: string }) {
+  const [failed, setFailed] = useState(false)
+  const domain = tickerToDomain[symbol]
+
+  if (!domain || failed) {
+    return (
+      <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+        <span className="text-white/60 text-xs font-bold">{symbol.slice(0, 2)}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center p-2">
+      <img
+        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
+        alt={`${symbol} logo`}
+        width={32}
+        height={32}
+        className="object-contain"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  )
 }
 
 export default function MarketMonitor({ watchlist, className }: MarketMonitorProps) {
@@ -44,7 +69,7 @@ export default function MarketMonitor({ watchlist, className }: MarketMonitorPro
 
         {/* Stocks Grid */}
         <div className="grid grid-cols-1 gap-3">
-          {stocks.map((symbol, index) => (
+          {stocks.map((symbol) => (
             <motion.div
               key={symbol}
               whileHover={{ scale: 1.02, x: 4 }}
@@ -52,18 +77,7 @@ export default function MarketMonitor({ watchlist, className }: MarketMonitorPro
               className="glass-subtle rounded-xl p-4 cursor-pointer transition-all duration-200 border border-white/5 hover:border-white/10"
             >
               <div className="flex items-center gap-4">
-                {/* Logo */}
-                {tickerToLogo[symbol] && (
-                  <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center">
-                    <Image
-                      src={`https://logo.clearbit.com/${tickerToLogo[symbol]}`}
-                      alt={`${symbol} logo`}
-                      width={40}
-                      height={40}
-                      className="object-contain"
-                    />
-                  </div>
-                )}
+                <StockLogo symbol={symbol} />
 
                 {/* Symbol */}
                 <div className="flex-1">
