@@ -3,6 +3,8 @@
 A complete human-in-the-loop algorithmic trading system that analyzes market data using technical indicators and news sentiment, proposes trades, and executes them only with your approval. Built with Next.js, FastAPI, Supabase (PostgreSQL), and WebSockets for real-time trading decisions.
 
 image of whole dashboard.
+<img width="1000" height="812" alt="Image" src="https://github.com/user-attachments/assets/847fe2bf-a029-448a-a7d7-b8753a4a1141" />
+<img width="1011" height="768" alt="Image" src="https://github.com/user-attachments/assets/8536c623-ea45-4318-90d8-ea9ff7240205" />
 
 ## Features
 
